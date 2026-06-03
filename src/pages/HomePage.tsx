@@ -17,6 +17,9 @@ export function HomePage() {
           <Link to="/personas" className="ghost-button">
             {siteCopy.home.secondaryCta}
           </Link>
+          <Link to="/memory" className="ghost-button">
+            Memory injection
+          </Link>
         </div>
       </section>
 

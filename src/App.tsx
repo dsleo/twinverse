@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { SiteLayout } from "./components/layout/SiteLayout";
 import { HomePage } from "./pages/HomePage";
 import { LabPage } from "./pages/LabPage";
+import { MemoryInjectionPage } from "./pages/MemoryInjectionPage";
 import { MethodPage } from "./pages/MethodPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { PersonasPage } from "./pages/PersonasPage";
@@ -14,6 +15,7 @@ export function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/lab" element={<Navigate to="/" replace />} />
         <Route path="/lab/:demoSlug" element={<LabPage />} />
+        <Route path="/memory" element={<MemoryInjectionPage />} />
         <Route path="/method" element={<MethodPage />} />
         <Route path="/personas" element={<PersonasPage />} />
         <Route path="/sources" element={<SourcesPage />} />

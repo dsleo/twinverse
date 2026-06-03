@@ -2,3 +2,68 @@
 @import "./styles/base.css";
 @import "./styles/layout.css";
 @import "./styles/components.css";
+
+.memory-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.memory-card,
+.sub-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  background: rgba(10, 12, 18, 0.72);
+  padding: 1rem;
+}
+
+.memory-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.memory-label {
+  display: block;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+  margin-bottom: 0.35rem;
+}
+
+.memory-page textarea,
+.memory-page select {
+  width: 100%;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  padding: 0.9rem 1rem;
+}
+
+.memory-grid {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 18rem;
+}
+
+.example-prompts,
+.reaction-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pipeline-list {
+  display: grid;
+  gap: 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.memory-error {
+  color: #ff9b9b;
+}
+
+@media (min-width: 800px) {
+  .reaction-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

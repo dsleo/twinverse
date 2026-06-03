@@ -129,6 +129,14 @@ describe("App routes", () => {
     expect(screen.getByLabelText(/source signals/i)).toBeInTheDocument();
   });
 
+  it("renders the memory injection page", async () => {
+    renderApp(["/memory"]);
+
+    expect(screen.getByRole("heading", { name: /build context packs before you simulate reactions/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /run pipeline/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /use example/i }).length).toBeGreaterThan(0);
+  });
+
   it("renders the method route", () => {
     renderApp(["/method"]);
     expect(screen.getByRole("heading", { name: /how the readout stays grounded/i })).toBeInTheDocument();

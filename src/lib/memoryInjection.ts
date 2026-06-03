@@ -228,24 +228,156 @@ function buildRetrievalPlan(input: MemoryInjectionInput, populationMap: ReturnTy
   };
 }
 
-function buildRetrievedSources(plan: ReturnType<typeof buildRetrievalPlan>): RetrievedSource[] {
-  return plan.queries.flatMap((query, queryIndex) => {
-    const baseId = `${query.provider}-${queryIndex + 1}`;
-    return [
-      {
-        id: `${baseId}-a`,
-        provider: query.provider,
-        title: `${query.provider.toUpperCase()} result for ${query.query}`,
-        snippet: `Synthetic ${query.provider} signal related to ${query.purpose.toLowerCase()}.`,
-        url: `https://example.com/${slugify(query.query)}/${query.provider}`,
-        publishedAt: new Date().toISOString(),
-        sourceName: query.provider,
-        query: query.query,
-        relevanceScore: clamp(0.78 - queryIndex * 0.05, 0.4, 0.95),
-        tags: [query.freshness, query.provider, "synthetic"],
-      },
-    ];
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function tokenSet(value: string) {
+  return new Set(normalizeText(value).split(/[^a-z0-9]+/).filter(Boolean));
+}
+
+function scoreOverlap(query: string, haystack: string) {
+  const queryTokens = Array.from(tokenSet(query));
+  if (queryTokens.length === 0) {
+    return 0;
+  }
+  const haystackTokens = tokenSet(haystack);
+  const matches = queryTokens.filter((token) => haystackTokens.has(token)).length;
+  return matches / queryTokens.length;
+}
+
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: {
+      "user-agent": "tweenverse-memory-injection/1.0",
+      accept: "application/json,text/plain,*/*",
+    },
   });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function fetchGdeltSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
+  const url = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
+  url.searchParams.set("query", query.query);
+  url.searchParams.set("mode", "artlist");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("maxrecords", "5");
+  url.searchParams.set("sort", "datedesc");
+  url.searchParams.set("timespan", query.freshness === "today" ? "24h" : query.freshness === "week" ? "7d" : "30d");
+  const data = (await fetchJson(url.toString())) as {
+    articles?: Array<{
+      title?: string;
+      url?: string;
+      seendate?: string;
+      sourceCountry?: string;
+      sourceCollection?: string;
+      domain?: string;
+      snippet?: string;
+    }>;
+  };
+  return (data.articles ?? []).slice(0, 5).map((article, index) => ({
+    id: `gdelt-${slugify(article.url ?? article.title ?? `${query.query}-${index}`)}`,
+    provider: "gdelt",
+    title: article.title ?? query.query,
+    snippet: article.snippet ?? article.sourceCollection ?? "GDELT article match",
+    url: article.url,
+    publishedAt: article.seendate,
+    sourceName: article.domain ?? article.sourceCountry ?? "GDELT",
+    query: query.query,
+    relevanceScore: clamp(0.95 - index * 0.1, 0.2, 0.95),
+    tags: ["gdelt", query.freshness, "news"],
+  }));
+}
+
+async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<RetrievedSource[]> {
+  const response = await fetch("https://video.lefigaro.fr/figaro/la-question-du-jour/", {
+    headers: {
+      "user-agent": "tweenverse-memory-injection/1.0",
+    },
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const html = await response.text();
+  const lines = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+  const match = lines.match(/La Question du Jour.{0,240}/i) ?? lines.match(/question du jour.{0,240}/i);
+  if (!match) {
+    return [];
+  }
+  return [
+    {
+      id: `figaro-question-du-jour-${slugify(query.query)}`,
+      provider: "rss",
+      title: "Le Figaro - La Question du Jour",
+      snippet: match[0].slice(0, 220),
+      url: "https://video.lefigaro.fr/figaro/la-question-du-jour/",
+      publishedAt: undefined,
+      sourceName: "Le Figaro",
+      query: query.query,
+      relevanceScore: 0.88,
+      tags: ["figaro", "question_du_jour", "public_debate"],
+    },
+  ];
+}
+
+async function fetchSyntheticSource(query: RetrievalQuery, queryIndex: number): Promise<RetrievedSource[]> {
+  return [
+    {
+      id: `${query.provider}-${queryIndex + 1}-a`,
+      provider: query.provider,
+      title: `${query.provider.toUpperCase()} result for ${query.query}`,
+      snippet: `Synthetic ${query.provider} signal related to ${query.purpose.toLowerCase()}.`,
+      url: `https://example.com/${slugify(query.query)}/${query.provider}`,
+      publishedAt: new Date().toISOString(),
+      sourceName: query.provider,
+      query: query.query,
+      relevanceScore: clamp(0.78 - queryIndex * 0.05, 0.4, 0.95),
+      tags: [query.freshness, query.provider, "synthetic"],
+    },
+  ];
+}
+
+async function buildRetrievedSources(plan: ReturnType<typeof buildRetrievalPlan>): Promise<RetrievedSource[]> {
+  const allSources = await Promise.all(
+    plan.queries.map(async (query, queryIndex) => {
+      try {
+        if (query.provider === "gdelt") {
+          return await fetchGdeltSources(query);
+        }
+        if (query.provider === "rss") {
+          const figaro = await fetchLeFigaroQuestionDuJour(query);
+          if (figaro.length > 0) {
+            return figaro;
+          }
+        }
+      } catch {
+        // fall back below
+      }
+      return fetchSyntheticSource(query, queryIndex);
+    }),
+  );
+  const flattened = allSources.flat();
+  const deduped = new Map<string, RetrievedSource>();
+  for (const source of flattened) {
+    const key = `${normalizeText(source.title)}|${source.url ?? ""}`;
+    const existing = deduped.get(key);
+    if (!existing || existing.relevanceScore < source.relevanceScore) {
+      deduped.set(key, source);
+    }
+  }
+  return Array.from(deduped.values()).sort((a, b) => b.relevanceScore - a.relevanceScore);
 }
 
 function buildContextPacks(
@@ -394,7 +526,7 @@ export async function executeMemoryInjection(input: MemoryInjectionInput): Promi
   run.populationMap = populationMap;
   const retrievalPlan = buildRetrievalPlan(input, populationMap);
   run.retrievalPlan = retrievalPlan;
-  run.retrievedSources = buildRetrievedSources(retrievalPlan);
+  run.retrievedSources = await buildRetrievedSources(retrievalPlan);
   run.contextPacks = buildContextPacks(input, populationMap, run.retrievedSources);
   const packByPersona = new Map(
     run.contextPacks.flatMap((pack) => pack.targetPersonaIds.map((personaId) => [personaId, pack] as const)),

@@ -1,4 +1,4 @@
-import { personas } from "../data/mockData";
+import { nemotronSeedPanel } from "../data/nemotronSeedPanel";
 import type { Persona } from "../types";
 
 export type InputType =
@@ -115,7 +115,7 @@ export interface MemoryInjectionRun {
 
 const STORAGE_KEY = "tweenverse.memoryInjectionRuns";
 
-const panel = personas.slice(0, 20);
+const panel = nemotronSeedPanel;
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -131,54 +131,69 @@ function slugify(value: string) {
     .slice(0, 24);
 }
 
-function segmentForPersona(persona: Persona, index: number): PopulationSegment {
-  const traits = `${persona.economicPosture} ${persona.household} ${persona.concerns.join(" ")}`.toLowerCase();
-  if (traits.includes("public") || traits.includes("services")) {
-    return {
-      id: "public-sector",
-      label: "Public-sector employees",
-      description: "People focused on service quality, institutional capacity, and budget pressure.",
-      targetPersonaIds: [persona.id],
-      likelyConcerns: ["service continuity", "budget pressure", "fairness"],
-      informationNeeds: ["implementation details", "public cost", "institutional feasibility"],
-    };
-  }
-  if (traits.includes("rural") || traits.includes("farmer")) {
-    return {
-      id: "rural",
-      label: "Rural households and workers",
-      description: "People who weigh access, price, and regional fairness.",
-      targetPersonaIds: [persona.id],
-      likelyConcerns: ["access", "cost of living", "regional treatment"],
-      informationNeeds: ["local impact", "subsidies", "regional plans"],
-    };
-  }
-  if (index % 3 === 0) {
-    return {
-      id: "urban-renters",
-      label: "Young urban renters",
-      description: "Price-sensitive urban audiences that respond to convenience and credibility.",
-      targetPersonaIds: [persona.id],
-      likelyConcerns: ["monthly cost", "convenience", "trust"],
-      informationNeeds: ["short explanations", "price impact", "near-term effects"],
-    };
-  }
-  return {
-    id: "mixed-households",
-    label: "Mixed households",
-    description: "Broad mainstream households balancing practicality and uncertainty.",
-    targetPersonaIds: [persona.id],
-    likelyConcerns: ["practical impact", "risk", "timing"],
-    informationNeeds: ["what changes now", "who pays", "who benefits"],
-  };
-}
-
 function buildPopulationMap() {
-  const segments = panel.map(segmentForPersona);
+  const segments: PopulationSegment[] = [
+    {
+      id: "working-class-households",
+      label: "Working-class households",
+      description: "Households that watch costs closely and read policy through pay, service quality, and job stability.",
+      targetPersonaIds: [],
+      likelyConcerns: ["cost of living", "job stability", "family expenses"],
+      informationNeeds: ["budget impact", "implementation speed", "who pays"],
+    },
+    {
+      id: "stable-middle-households",
+      label: "Stable middle households",
+      description: "Middle-income households that want practical proof, not abstract promises.",
+      targetPersonaIds: [],
+      likelyConcerns: ["skills and training", "public services", "family expenses"],
+      informationNeeds: ["practical consequences", "risk", "timeline"],
+    },
+    {
+      id: "retired-fixed-income",
+      label: "Retired and fixed-income households",
+      description: "Older or fixed-income households that focus on fairness, predictability, and public services.",
+      targetPersonaIds: [],
+      likelyConcerns: ["public services", "cost of living", "stability"],
+      informationNeeds: ["what changes now", "what remains stable", "local impact"],
+    },
+    {
+      id: "self-employed-pros",
+      label: "Self-employed and senior professionals",
+      description: "Independent and higher-skill households that examine operational detail and risk.",
+      targetPersonaIds: [],
+      likelyConcerns: ["business risk", "efficiency", "compliance"],
+      informationNeeds: ["operational detail", "cost/benefit", "implementation"],
+    },
+    {
+      id: "urban-family-renters",
+      label: "Urban and family renters",
+      description: "Younger or more mobile households that weigh convenience, trust, and day-to-day practicality.",
+      targetPersonaIds: [],
+      likelyConcerns: ["monthly cost", "convenience", "trust"],
+      informationNeeds: ["plain-language summary", "near-term effects", "direct impact"],
+    },
+  ];
+
+  for (const persona of panel) {
+    const text = `${persona.occupation} ${persona.household} ${persona.economicPosture}`.toLowerCase();
+    let targetSegment = segments[1];
+    if (text.includes("retrait") || persona.age >= 63) {
+      targetSegment = segments[2];
+    } else if (text.includes("cadre") || text.includes("entreprise") || text.includes("self-employed") || text.includes("profession")) {
+      targetSegment = segments[3];
+    } else if (text.includes("living alone") || text.includes("jeune") || persona.age <= 35) {
+      targetSegment = segments[4];
+    } else if (text.includes("ouvrier") || text.includes("pragmatic")) {
+      targetSegment = segments[0];
+    }
+    targetSegment.targetPersonaIds.push(persona.id);
+  }
+
   return {
-    segments: segments.slice(0, 5),
+    segments,
     globalRationale:
-      "The panel is divided into a small set of practical audience clusters using visible persona metadata and concerns.",
+      "The panel is divided into five audience clusters using the dataset personas' occupation, age, and household patterns.",
   };
 }
 
@@ -263,7 +278,7 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 async function fetchGdeltSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
-  const url = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
+  const url = new URL("/proxy/gdelt", window.location.origin);
   url.searchParams.set("query", query.query);
   url.searchParams.set("mode", "artlist");
   url.searchParams.set("format", "json");
@@ -296,7 +311,7 @@ async function fetchGdeltSources(query: RetrievalQuery): Promise<RetrievedSource
 }
 
 async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<RetrievedSource[]> {
-  const response = await fetch("https://video.lefigaro.fr/figaro/la-question-du-jour/", {
+  const response = await fetch("/proxy/lefigaro", {
     headers: {
       "user-agent": "tweenverse-memory-injection/1.0",
     },
@@ -322,7 +337,7 @@ async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<Retri
       provider: "rss",
       title: "Le Figaro - La Question du Jour",
       snippet: match[0].slice(0, 220),
-      url: "https://video.lefigaro.fr/figaro/la-question-du-jour/",
+      url: "https://video.lefigaro.fr/figaro/la-question-du-jour",
       publishedAt: undefined,
       sourceName: "Le Figaro",
       query: query.query,
@@ -431,9 +446,12 @@ function emotionForStance(stance: SyntheticReaction["stance"]): SyntheticReactio
   }
 }
 
-function simulateReactions(input: MemoryInjectionInput, packByPersona: Map<string, ContextPack>) {
+function simulateReactions(input: MemoryInjectionInput, packByPersona: Map<string, ContextPack>, fallbackPack?: ContextPack) {
   return panel.map((persona, index) => {
-    const pack = packByPersona.get(persona.id)!;
+    const pack = packByPersona.get(persona.id) ?? fallbackPack;
+    if (!pack) {
+      throw new Error("No context pack available for persona assignment.");
+    }
     const stance = stanceForIndex(index);
     return {
       personaId: persona.id,
@@ -528,10 +546,14 @@ export async function executeMemoryInjection(input: MemoryInjectionInput): Promi
   run.retrievalPlan = retrievalPlan;
   run.retrievedSources = await buildRetrievedSources(retrievalPlan);
   run.contextPacks = buildContextPacks(input, populationMap, run.retrievedSources);
-  const packByPersona = new Map(
-    run.contextPacks.flatMap((pack) => pack.targetPersonaIds.map((personaId) => [personaId, pack] as const)),
-  );
-  run.reactions = simulateReactions(input, packByPersona);
+  const packByPersona = new Map<string, ContextPack>();
+  for (const pack of run.contextPacks) {
+    for (const personaId of pack.targetPersonaIds) {
+      packByPersona.set(personaId, pack);
+    }
+  }
+  const defaultPack = run.contextPacks[0];
+  run.reactions = simulateReactions(input, packByPersona, defaultPack);
   run.aggregateReport = buildAggregateReport(run.reactions, run.contextPacks);
   run.status = "completed";
   persistRun(run);

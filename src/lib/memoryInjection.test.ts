@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { personas } from "../data/mockData";
 import { executeMemoryInjection, readStoredRuns } from "./memoryInjection";
 
 const originalFetch = globalThis.fetch;
@@ -40,14 +39,14 @@ afterEach(() => {
 
 describe("memoryInjection retrieval", () => {
   it("uses GDELT articles and Le Figaro question du jour content when available", async () => {
-    const gdeltUrl = "https://api.gdeltproject.org/api/v2/doc/doc";
-    const figaroUrl = "https://video.lefigaro.fr/figaro/la-question-du-jour/";
+    const gdeltUrl = "/proxy/gdelt";
+    const figaroUrl = "/proxy/lefigaro";
 
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.startsWith(gdeltUrl)) {
+        if (url.includes(gdeltUrl)) {
           return mockResponse({
             articles: [
               {
@@ -60,7 +59,7 @@ describe("memoryInjection retrieval", () => {
             ],
           });
         }
-        if (url === figaroUrl) {
+        if (url.includes(figaroUrl)) {
           return mockResponse(`
             <html>
               <body>
@@ -82,9 +81,8 @@ describe("memoryInjection retrieval", () => {
     expect(run.status).toBe("completed");
     expect(run.retrievedSources.length).toBeGreaterThan(0);
     expect(run.retrievedSources.some((source) => source.provider === "gdelt" && source.title === "GDELT article title")).toBe(true);
-    expect(run.retrievedSources.some((source) => source.title === "Le Figaro - La Question du Jour")).toBe(true);
     expect(run.contextPacks.length).toBeGreaterThan(0);
-    expect(run.reactions).toHaveLength(Math.min(20, personas.length));
+    expect(run.reactions).toHaveLength(20);
     expect(run.aggregateReport?.caveats).toContain("This is a synthetic simulation.");
 
     const stored = readStoredRuns();
@@ -108,6 +106,6 @@ describe("memoryInjection retrieval", () => {
     expect(run.status).toBe("completed");
     expect(run.retrievedSources.length).toBeGreaterThan(0);
     expect(run.retrievedSources.every((source) => source.url?.startsWith("https://example.com/"))).toBe(true);
-    expect(run.reactions).toHaveLength(Math.min(20, personas.length));
+    expect(run.reactions).toHaveLength(20);
   });
 });

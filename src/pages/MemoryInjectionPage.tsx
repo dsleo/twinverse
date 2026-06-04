@@ -18,6 +18,14 @@ export function MemoryInjectionPage() {
   const [history, setHistory] = useState<MemoryInjectionRun[]>(() => readStoredRuns());
   const [openReactionIds, setOpenReactionIds] = useState<string[]>([]);
   const activeRunId = run?.id ?? null;
+  const summaryCards = run
+    ? [
+        { label: "Sources", value: `${run.retrievedSources.length}` },
+        { label: "Packs", value: `${run.contextPacks.length}` },
+        { label: "Reactions", value: `${run.reactions.length}` },
+        { label: "Segments", value: `${run.populationMap?.segments.length ?? 0}` },
+      ]
+    : [];
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -123,6 +131,26 @@ export function MemoryInjectionPage() {
       </section>
 
       {run ? (
+        <section className="memory-card memory-summary">
+          <div className="section-heading section-heading-compact">
+            <div>
+              <div className="section-label">Run summary</div>
+              <h2>At a glance</h2>
+            </div>
+            <p>Jump into the parts of the run you need without scanning the full report first.</p>
+          </div>
+          <div className="summary-grid">
+            {summaryCards.map((item) => (
+              <article key={item.label} className="summary-card">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {run ? (
         <section className="memory-card">
           <div className="section-heading section-heading-compact">
             <div>
@@ -162,8 +190,10 @@ export function MemoryInjectionPage() {
                     <span>{segment.targetPersonaIds.length} personas</span>
                   </div>
                   <p>{segment.description}</p>
-                  <p><strong>Concerns:</strong> {segment.likelyConcerns.join(", ")}</p>
-                  <p><strong>Information needs:</strong> {segment.informationNeeds.join(", ")}</p>
+                  <div className="inline-facts">
+                    <span><strong>Concerns:</strong> {segment.likelyConcerns.join(", ")}</span>
+                    <span><strong>Needs:</strong> {segment.informationNeeds.join(", ")}</span>
+                  </div>
                 </article>
               ))}
             </div>
@@ -209,10 +239,12 @@ export function MemoryInjectionPage() {
                     <span>{pack.targetPersonaIds.length} personas</span>
                   </div>
                   <p>{pack.memoryInjection.conciseBriefing}</p>
-                  <p><strong>Known:</strong> {pack.memoryInjection.factsLikelyKnown.join(" | ")}</p>
-                  <p><strong>Ignored:</strong> {pack.memoryInjection.factsLikelyIgnored.join(" | ")}</p>
-                  <p><strong>Practical:</strong> {pack.memoryInjection.practicalImplications.join(" | ")}</p>
-                  <p><strong>Sources:</strong> {pack.sourceIds.join(", ")}</p>
+                  <div className="inline-facts">
+                    <span><strong>Known:</strong> {pack.memoryInjection.factsLikelyKnown.join(" | ")}</span>
+                    <span><strong>Ignored:</strong> {pack.memoryInjection.factsLikelyIgnored.join(" | ")}</span>
+                    <span><strong>Practical:</strong> {pack.memoryInjection.practicalImplications.join(" | ")}</span>
+                    <span><strong>Sources:</strong> {pack.sourceIds.join(", ")}</span>
+                  </div>
                 </article>
               ))}
             </div>

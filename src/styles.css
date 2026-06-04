@@ -70,6 +70,33 @@
   gap: 0.75rem;
 }
 
+.memory-summary {
+  border-color: var(--line-strong);
+}
+
+.summary-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.summary-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: color-mix(in oklch, var(--surface-raised) 80%, var(--bg) 20%);
+}
+
+.summary-card span {
+  color: var(--quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+}
+
 .population-grid,
 .context-pack-grid {
   display: grid;
@@ -113,6 +140,15 @@
 .context-pack-card p,
 .history-card p {
   max-width: 68ch;
+}
+
+.inline-facts {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.inline-facts span {
+  display: block;
 }
 
 .reaction-card summary {
@@ -165,6 +201,10 @@
 }
 
 @media (min-width: 800px) {
+  .summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .population-grid,
   .context-pack-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

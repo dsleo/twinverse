@@ -41,6 +41,11 @@ describe("memoryInjection retrieval", () => {
   it("uses GDELT articles and Le Figaro question du jour content when available", async () => {
     const gdeltUrl = "/proxy/gdelt";
     const figaroUrl = "/proxy/lefigaro";
+    const wikipediaSearchUrl = "/proxy/wikipedia-search";
+    const wikipediaSummaryUrl = "/proxy/wikipedia-summary";
+    const googleNewsUrl = "/proxy/google-news-rss";
+    const redditUrl = "/proxy/reddit-search";
+    const googleTrendsUrl = "/proxy/google-trends-daily";
 
     vi.stubGlobal(
       "fetch",
@@ -57,6 +62,64 @@ describe("memoryInjection retrieval", () => {
                 snippet: "A recent French policy story",
               },
             ],
+          });
+        }
+        if (url.includes(googleNewsUrl)) {
+          return mockResponse(`
+            <rss><channel>
+              <item>
+                <title>Nucléaire : nouvelle séquence politique</title>
+                <link>https://news.example.com/nucleaire</link>
+                <description>Une synthèse des récents articles sur le nucléaire.</description>
+                <pubDate>Wed, 04 Jun 2026 10:00:00 GMT</pubDate>
+              </item>
+            </channel></rss>
+          `);
+        }
+        if (url.includes(redditUrl)) {
+          return mockResponse({
+            data: {
+              children: [
+                {
+                  data: {
+                    title: "Débat sur les centrales nucléaires en France",
+                    selftext: "Discussion publique sur les coûts et la sécurité.",
+                    permalink: "/r/france/comments/abc123/nucleaire/",
+                    subreddit_name_prefixed: "r/france",
+                    created_utc: 1780567200,
+                  },
+                },
+              ],
+            },
+          });
+        }
+        if (url.includes(googleTrendsUrl)) {
+          return mockResponse(`)]}',
+            {"default":{"trendingSearchesDays":[{"trendingSearches":[
+              {"title":{"query":"centrale nucléaire"},"formattedTraffic":"20K+","articles":[{"title":"Le nucléaire remonte dans le débat public"}]}
+            ]}]}}`);
+        }
+        if (url.includes(wikipediaSearchUrl)) {
+          return mockResponse({
+            query: {
+              search: [
+                {
+                  title: "Énergie nucléaire en France",
+                  snippet: "Résumé encyclopédique sur le nucléaire en France.",
+                },
+              ],
+            },
+          });
+        }
+        if (url.includes(wikipediaSummaryUrl)) {
+          return mockResponse({
+            title: "Énergie nucléaire en France",
+            extract: "La France dispose d'un parc nucléaire majeur.",
+            content_urls: {
+              desktop: {
+                page: "https://fr.wikipedia.org/wiki/%C3%89nergie_nucl%C3%A9aire_en_France",
+              },
+            },
           });
         }
         if (url.includes(figaroUrl)) {
@@ -80,7 +143,11 @@ describe("memoryInjection retrieval", () => {
 
     expect(run.status).toBe("completed");
     expect(run.retrievedSources.length).toBeGreaterThan(0);
+    expect(run.retrievedSources.some((source) => source.provider === "wikipedia" && source.provenance === "live")).toBe(true);
+    expect(run.retrievedSources.some((source) => source.provider === "rss" && source.provenance === "live")).toBe(true);
     expect(run.retrievedSources.some((source) => source.provider === "gdelt" && source.title === "GDELT article title")).toBe(true);
+    expect(run.retrievedSources.some((source) => source.provider === "reddit" && source.provenance === "live")).toBe(true);
+    expect(run.retrievedSources.some((source) => source.provider === "google_trends" && source.provenance === "live")).toBe(true);
     expect(run.contextPacks.length).toBeGreaterThan(0);
     expect(run.reactions).toHaveLength(20);
     expect(run.aggregateReport?.caveats).toContain("This is a synthetic simulation.");

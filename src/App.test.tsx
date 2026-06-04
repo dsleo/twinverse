@@ -132,9 +132,10 @@ describe("App routes", () => {
   it("renders the memory injection page", async () => {
     renderApp(["/memory"]);
 
-    expect(screen.getByRole("heading", { name: /build context packs before you simulate reactions/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /prime the panel before you read reactions/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /run pipeline/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /use example/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/run history/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /example 1/i })).not.toBeInTheDocument();
   });
 
   it("renders the method route", () => {

@@ -1,4 +1,5 @@
 import { getPersona } from "../../lib/contentRepository";
+import { PersonaCarousel } from "../personas/PersonaCarousel";
 import { useEffect, useState } from "react";
 import { siteCopy } from "../../config/siteCopy";
 import type { PersonaResponse } from "../../types";
@@ -18,31 +19,18 @@ export function PersonaSection({ responses }: { responses: PersonaResponse[] }) 
           <h2>{siteCopy.personas.sectionTitle}</h2>
         </div>
       </div>
-      <div className="persona-carousel" role="list">
-        {responses.map((response) => {
+      <PersonaCarousel
+        items={responses.map((response) => {
           const persona = getPersona(response.personaId);
-          const isActive = selectedPersonaId === response.personaId;
-          return (
-            <article
-              key={response.personaId}
-              className={`persona-list-card persona-carousel-card ${isActive ? "active" : ""}`}
-              role="listitem"
-            >
-              <button
-                className="persona-button persona-card-toggle"
-                onClick={() => setSelectedPersonaId((currentId) => (currentId === response.personaId ? "" : response.personaId))}
-                aria-expanded={isActive}
-                aria-pressed={isActive}
-              >
-                <div className="persona-meta">
-                  <strong>{persona.name}</strong>
-                </div>
-                <p className="persona-role">{persona.occupation}</p>
-              </button>
-            </article>
-          );
+          return {
+            id: response.personaId,
+            title: persona.name,
+            subtitle: persona.occupation,
+          };
         })}
-      </div>
+        selectedId={selectedPersonaId}
+        onToggle={(id) => setSelectedPersonaId((currentId) => (currentId === id ? "" : id))}
+      />
       {responses.map((response) => {
         if (response.personaId !== selectedPersonaId) {
           return null;

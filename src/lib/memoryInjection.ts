@@ -132,6 +132,33 @@ function slugify(value: string) {
     .slice(0, 24);
 }
 
+const searchStopwords = new Set([
+  "faut",
+  "il",
+  "les",
+  "des",
+  "pour",
+  "avec",
+  "dans",
+  "contre",
+  "entre",
+  "question",
+  "article",
+  "speech",
+  "proposal",
+  "france",
+]);
+
+function buildSearchPhrase(input: string) {
+  const keywords = input
+    .match(/[a-zà-ÿ]{4,}/gi)
+    ?.map((token) => normalizeText(token))
+    .filter((token) => !searchStopwords.has(token))
+    .slice(0, 4) ?? [];
+
+  return keywords.length > 0 ? keywords.join(" ") : input;
+}
+
 function buildPopulationMap() {
   const segments: PopulationSegment[] = [
     {
@@ -192,7 +219,7 @@ function buildPopulationMap() {
   }
 
   return {
-    segments,
+    segments: [...segments].sort((a, b) => b.targetPersonaIds.length - a.targetPersonaIds.length || a.label.localeCompare(b.label)),
     globalRationale:
       "The panel is divided into five audience clusters using the dataset personas' occupation, age, and household patterns.",
   };
@@ -201,6 +228,7 @@ function buildPopulationMap() {
 function buildRetrievalPlan(input: MemoryInjectionInput, populationMap: ReturnType<typeof buildPopulationMap>) {
   const text = input.rawInput.toLowerCase();
   const entities = Array.from(new Set(text.match(/[a-zà-ÿ]{4,}/g)?.slice(0, 6) ?? ["france"]));
+  const searchPhrase = buildSearchPhrase(input.rawInput);
   const themes = ["public policy", "public debate", "background context"];
   const queries: RetrievalQuery[] = [
     {
@@ -211,7 +239,7 @@ function buildRetrievalPlan(input: MemoryInjectionInput, populationMap: ReturnTy
     },
     {
       provider: "rss",
-      query: entities[0] ?? "france",
+      query: searchPhrase,
       freshness: "week",
       purpose: "Recent media framing",
     },
@@ -223,7 +251,7 @@ function buildRetrievalPlan(input: MemoryInjectionInput, populationMap: ReturnTy
     },
     {
       provider: "reddit",
-      query: entities[0] ?? "france",
+      query: searchPhrase,
       freshness: "month",
       purpose: "Public discourse signal",
     },
@@ -231,7 +259,7 @@ function buildRetrievalPlan(input: MemoryInjectionInput, populationMap: ReturnTy
   if (populationMap.segments.length > 3) {
     queries.push({
       provider: "google_trends",
-      query: entities[0] ?? "france",
+      query: searchPhrase,
       freshness: "week",
       purpose: "Public attention proxy",
     });
@@ -312,6 +340,200 @@ async function fetchGdeltSources(query: RetrievalQuery): Promise<RetrievedSource
   }));
 }
 
+async function fetchWikipediaSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
+  const searchUrl = new URL("/proxy/wikipedia-search", window.location.origin);
+  searchUrl.searchParams.set("action", "query");
+  searchUrl.searchParams.set("list", "search");
+  searchUrl.searchParams.set("srsearch", query.query);
+  searchUrl.searchParams.set("format", "json");
+  searchUrl.searchParams.set("origin", "*");
+
+  const searchData = (await fetchJson(searchUrl.toString())) as {
+    query?: { search?: Array<{ title?: string; snippet?: string }> };
+  };
+  const title = searchData.query?.search?.[0]?.title;
+  if (!title) {
+    return [];
+  }
+
+  const summaryResponse = await fetch(`/proxy/wikipedia-summary/${encodeURIComponent(title)}`, {
+    headers: {
+      "user-agent": "tweenverse-memory-injection/1.0",
+      accept: "application/json,text/plain,*/*",
+    },
+  });
+  if (!summaryResponse.ok) {
+    return [];
+  }
+  const summaryData = (await summaryResponse.json()) as {
+    title?: string;
+    extract?: string;
+    content_urls?: { desktop?: { page?: string } };
+  };
+
+  return [
+    {
+      id: `wikipedia-${slugify(summaryData.title ?? title)}`,
+      provider: "wikipedia",
+      provenance: "live",
+      title: summaryData.title ?? title,
+      snippet: summaryData.extract ?? searchData.query?.search?.[0]?.snippet ?? "Wikipedia summary",
+      url: summaryData.content_urls?.desktop?.page,
+      sourceName: "Wikipedia",
+      query: query.query,
+      relevanceScore: 0.9,
+      tags: ["wikipedia", "background", "live"],
+    },
+  ];
+}
+
+function parseXmlItems(xml: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, "text/xml");
+  return Array.from(doc.querySelectorAll("item"));
+}
+
+function stripMarkup(value: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(value, "text/html");
+  return doc.body.textContent?.replace(/\s+/g, " ").trim() ?? value;
+}
+
+async function fetchRssSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
+  const url = new URL("/proxy/google-news-rss", window.location.origin);
+  url.searchParams.set("q", query.query);
+  url.searchParams.set("hl", "fr");
+  url.searchParams.set("gl", "FR");
+  url.searchParams.set("ceid", "FR:fr");
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "user-agent": "tweenverse-memory-injection/1.0",
+      accept: "application/rss+xml,application/xml,text/xml,text/plain,*/*",
+    },
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const xml = await response.text();
+  return parseXmlItems(xml).slice(0, 4).map((item, index) => ({
+    id: `rss-${slugify(item.querySelector("link")?.textContent ?? `${query.query}-${index}`)}`,
+    provider: "rss",
+    provenance: "live",
+    title: item.querySelector("title")?.textContent?.trim() ?? "Recent media framing",
+    snippet: stripMarkup(item.querySelector("description")?.textContent?.trim() ?? "Recent media coverage related to the prompt."),
+    url: item.querySelector("link")?.textContent?.trim(),
+    publishedAt: item.querySelector("pubDate")?.textContent?.trim(),
+    sourceName: "Google News",
+    query: query.query,
+    relevanceScore: clamp(0.9 - index * 0.08, 0.45, 0.9),
+    tags: ["rss", "live", query.freshness],
+  }));
+}
+
+async function fetchRedditSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
+  const url = new URL("/proxy/reddit-search", window.location.origin);
+  url.searchParams.set("q", query.query);
+  url.searchParams.set("sort", "relevance");
+  url.searchParams.set("limit", "4");
+  url.searchParams.set("t", query.freshness === "today" ? "day" : query.freshness === "week" ? "week" : "month");
+
+  const data = (await fetchJson(url.toString())) as {
+    data?: {
+      children?: Array<{
+        data?: {
+          title?: string;
+          selftext?: string;
+          permalink?: string;
+          subreddit_name_prefixed?: string;
+          created_utc?: number;
+        };
+      }>;
+    };
+  };
+
+  return (data.data?.children ?? []).slice(0, 4).flatMap((entry, index) => {
+    const post = entry.data;
+    if (!post?.title) {
+      return [];
+    }
+    return [
+      {
+        id: `reddit-${slugify(post.permalink ?? `${query.query}-${index}`)}`,
+        provider: "reddit",
+        provenance: "live",
+        title: post.title,
+        snippet: post.selftext?.slice(0, 220) || "Recent public discussion related to the prompt.",
+        url: post.permalink ? `https://www.reddit.com${post.permalink}` : undefined,
+        publishedAt: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : undefined,
+        sourceName: post.subreddit_name_prefixed ?? "Reddit",
+        query: query.query,
+        relevanceScore: clamp(0.82 - index * 0.08, 0.4, 0.82),
+        tags: ["reddit", "live", query.freshness],
+      },
+    ];
+  });
+}
+
+async function fetchGoogleTrendsSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
+  const url = new URL("/proxy/google-trends-daily", window.location.origin);
+  url.searchParams.set("hl", "fr");
+  url.searchParams.set("geo", "FR");
+  url.searchParams.set("ns", "15");
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "user-agent": "tweenverse-memory-injection/1.0",
+      accept: "application/json,text/plain,*/*",
+    },
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const text = await response.text();
+  const trimmed = text.replace(/^\)\]\}',?\n/, "");
+  const data = JSON.parse(trimmed) as {
+    default?: {
+      trendingSearchesDays?: Array<{
+        trendingSearches?: Array<{
+          title?: { query?: string };
+          formattedTraffic?: string;
+          articles?: Array<{ title?: string }>;
+        }>;
+      }>;
+    };
+  };
+  const trends = data.default?.trendingSearchesDays?.flatMap((day) => day.trendingSearches ?? []) ?? [];
+  const ranked = trends
+    .map((trend, index) => ({
+      trend,
+      score: scoreOverlap(query.query, `${trend.title?.query ?? ""} ${trend.articles?.map((article) => article.title ?? "").join(" ")}`),
+      index,
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 2);
+
+  return ranked.flatMap(({ trend, score }, index) => {
+    const title = trend.title?.query;
+    if (!title) {
+      return [];
+    }
+    return [
+      {
+        id: `google-trends-${slugify(title)}`,
+        provider: "google_trends",
+        provenance: "live",
+        title,
+        snippet: `Trending in France${trend.formattedTraffic ? ` · ${trend.formattedTraffic}` : ""}. ${trend.articles?.[0]?.title ?? "Current public attention signal."}`,
+        sourceName: "Google Trends",
+        query: query.query,
+        relevanceScore: clamp(Math.max(score, 0.45) - index * 0.05, 0.35, 0.78),
+        tags: ["google_trends", "live", query.freshness],
+      },
+    ];
+  });
+}
+
 function extractFigaroQuestion(html: string) {
   const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
   const twitterTitle = html.match(/<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
@@ -367,12 +589,20 @@ async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<Retri
 }
 
 async function fetchSyntheticSource(query: RetrievalQuery, queryIndex: number): Promise<RetrievedSource[]> {
+  const fallbackTitles: Record<RetrievalQuery["provider"], string> = {
+    wikipedia: "Background reference",
+    rss: "Recent media framing",
+    gdelt: "Recent event context",
+    reddit: "Public discourse signal",
+    google_trends: "Public attention signal",
+  };
+
   return [
     {
       id: `${query.provider}-${queryIndex + 1}-a`,
       provider: query.provider,
       provenance: "fallback",
-      title: `${query.provider.toUpperCase()} result for ${query.query}`,
+      title: fallbackTitles[query.provider],
       snippet: `Synthetic ${query.provider} signal related to ${query.purpose.toLowerCase()}.`,
       url: `https://example.com/${slugify(query.query)}/${query.provider}`,
       publishedAt: new Date().toISOString(),
@@ -388,13 +618,35 @@ async function buildRetrievedSources(plan: ReturnType<typeof buildRetrievalPlan>
   const allSources = await Promise.all(
     plan.queries.map(async (query, queryIndex) => {
       try {
+        if (query.provider === "wikipedia") {
+          const wikipedia = await fetchWikipediaSources(query);
+          if (wikipedia.length > 0) {
+            return wikipedia;
+          }
+        }
         if (query.provider === "gdelt") {
           return await fetchGdeltSources(query);
         }
         if (query.provider === "rss") {
+          const rss = await fetchRssSources(query);
+          if (rss.length > 0) {
+            return rss;
+          }
           const figaro = await fetchLeFigaroQuestionDuJour(query);
           if (figaro.length > 0) {
             return figaro;
+          }
+        }
+        if (query.provider === "reddit") {
+          const reddit = await fetchRedditSources(query);
+          if (reddit.length > 0) {
+            return reddit;
+          }
+        }
+        if (query.provider === "google_trends") {
+          const trends = await fetchGoogleTrendsSources(query);
+          if (trends.length > 0) {
+            return trends;
           }
         }
       } catch {
@@ -514,7 +766,7 @@ function buildAggregateReport(reactions: SyntheticReaction[], packs: ContextPack
         representativeQuotes: reactionsForPack.slice(0, 2).map((reaction) => reaction.quote),
       };
     }),
-    overallPattern: "Audience context changes interpretation more than the raw input itself.",
+    overallPattern: "The split comes from how each group weighs cost, trust, and immediate consequences, not from the wording alone.",
     caveats: [
       "This is a synthetic simulation.",
       "This is not a representative poll.",

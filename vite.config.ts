@@ -15,6 +15,31 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/proxy\/lefigaro/, "/figaro/la-question-du-jour"),
       },
+      "/proxy/wikipedia-search": {
+        target: "https://fr.wikipedia.org",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/wikipedia-search/, "/w/api.php"),
+      },
+      "/proxy/wikipedia-summary": {
+        target: "https://fr.wikipedia.org",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/wikipedia-summary/, "/api/rest_v1/page/summary"),
+      },
+      "/proxy/google-news-rss": {
+        target: "https://news.google.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/google-news-rss/, "/rss/search"),
+      },
+      "/proxy/reddit-search": {
+        target: "https://www.reddit.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/reddit-search/, "/search.json"),
+      },
+      "/proxy/google-trends-daily": {
+        target: "https://trends.google.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/google-trends-daily/, "/trends/api/dailytrends"),
+      },
     },
   },
   test: {

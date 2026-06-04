@@ -36,6 +36,7 @@ export interface RetrievedSource {
   provenance: "live" | "fallback";
   title: string;
   snippet: string;
+  failureReason?: string;
   url?: string;
   publishedAt?: string;
   sourceName?: string;
@@ -416,19 +417,29 @@ async function fetchRssSources(query: RetrievalQuery): Promise<RetrievedSource[]
     return [];
   }
   const xml = await response.text();
-  return parseXmlItems(xml).slice(0, 4).map((item, index) => ({
-    id: `rss-${slugify(item.querySelector("link")?.textContent ?? `${query.query}-${index}`)}`,
-    provider: "rss",
-    provenance: "live",
-    title: item.querySelector("title")?.textContent?.trim() ?? "Recent media framing",
-    snippet: stripMarkup(item.querySelector("description")?.textContent?.trim() ?? "Recent media coverage related to the prompt."),
-    url: item.querySelector("link")?.textContent?.trim(),
-    publishedAt: item.querySelector("pubDate")?.textContent?.trim(),
-    sourceName: "Google News",
-    query: query.query,
-    relevanceScore: clamp(0.9 - index * 0.08, 0.45, 0.9),
-    tags: ["rss", "live", query.freshness],
-  }));
+  return parseXmlItems(xml).slice(0, 4).map((item, index) => {
+    const rawTitle = item.querySelector("title")?.textContent?.trim() ?? "Recent media framing";
+    const parts = rawTitle.split(" - ");
+    const title = parts.length > 1 ? parts.slice(0, -1).join(" - ") : rawTitle;
+    const sourceName = parts.length > 1 ? parts.at(-1) ?? "Google News" : "Google News";
+    let snippet = stripMarkup(item.querySelector("description")?.textContent?.trim() ?? "Recent media coverage related to the prompt.");
+    if (normalizeText(snippet).startsWith(normalizeText(title))) {
+      snippet = snippet.slice(title.length).replace(/^[\s:.\-–—]+/, "").trim();
+    }
+    return {
+      id: `rss-${slugify(item.querySelector("link")?.textContent ?? `${query.query}-${index}`)}`,
+      provider: "rss",
+      provenance: "live",
+      title,
+      snippet,
+      url: item.querySelector("link")?.textContent?.trim(),
+      publishedAt: item.querySelector("pubDate")?.textContent?.trim(),
+      sourceName,
+      query: query.query,
+      relevanceScore: clamp(0.9 - index * 0.08, 0.45, 0.9),
+      tags: ["rss", "live", query.freshness],
+    };
+  });
 }
 
 async function fetchRedditSources(query: RetrievalQuery): Promise<RetrievedSource[]> {
@@ -488,7 +499,7 @@ async function fetchGoogleTrendsSources(query: RetrievalQuery): Promise<Retrieve
     },
   });
   if (!response.ok) {
-    return [];
+    throw new Error(`HTTP ${response.status}`);
   }
   const text = await response.text();
   const trimmed = text.replace(/^\)\]\}',?\n/, "");
@@ -588,7 +599,7 @@ async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<Retri
   ];
 }
 
-async function fetchSyntheticSource(query: RetrievalQuery, queryIndex: number): Promise<RetrievedSource[]> {
+function buildFallbackSource(query: RetrievalQuery, queryIndex: number, failureReason: string): RetrievedSource[] {
   const fallbackTitles: Record<RetrievalQuery["provider"], string> = {
     wikipedia: "Background reference",
     rss: "Recent media framing",
@@ -603,7 +614,8 @@ async function fetchSyntheticSource(query: RetrievalQuery, queryIndex: number): 
       provider: query.provider,
       provenance: "fallback",
       title: fallbackTitles[query.provider],
-      snippet: `Synthetic ${query.provider} signal related to ${query.purpose.toLowerCase()}.`,
+      snippet: failureReason,
+      failureReason,
       url: `https://example.com/${slugify(query.query)}/${query.provider}`,
       publishedAt: new Date().toISOString(),
       sourceName: query.provider,
@@ -614,47 +626,93 @@ async function fetchSyntheticSource(query: RetrievalQuery, queryIndex: number): 
   ];
 }
 
-async function buildRetrievedSources(plan: ReturnType<typeof buildRetrievalPlan>): Promise<RetrievedSource[]> {
-  const allSources = await Promise.all(
-    plan.queries.map(async (query, queryIndex) => {
-      try {
-        if (query.provider === "wikipedia") {
-          const wikipedia = await fetchWikipediaSources(query);
-          if (wikipedia.length > 0) {
-            return wikipedia;
-          }
-        }
-        if (query.provider === "gdelt") {
-          return await fetchGdeltSources(query);
-        }
-        if (query.provider === "rss") {
-          const rss = await fetchRssSources(query);
-          if (rss.length > 0) {
-            return rss;
-          }
-          const figaro = await fetchLeFigaroQuestionDuJour(query);
-          if (figaro.length > 0) {
-            return figaro;
-          }
-        }
-        if (query.provider === "reddit") {
-          const reddit = await fetchRedditSources(query);
-          if (reddit.length > 0) {
-            return reddit;
-          }
-        }
-        if (query.provider === "google_trends") {
-          const trends = await fetchGoogleTrendsSources(query);
-          if (trends.length > 0) {
-            return trends;
-          }
-        }
-      } catch {
-        // fall back below
+function describeError(providerLabel: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/HTTP 4\d\d/.test(message)) {
+    return `${providerLabel} rejected the request (${message}).`;
+  }
+  if (/HTTP 5\d\d/.test(message)) {
+    return `${providerLabel} failed upstream (${message}).`;
+  }
+  if (/fetch failed|NetworkError|Failed to fetch/i.test(message)) {
+    return `${providerLabel} could not be reached from the browser session.`;
+  }
+  return `${providerLabel} failed while parsing or returning data (${message}).`;
+}
+
+async function resolveProviderSources(query: RetrievalQuery, queryIndex: number): Promise<RetrievedSource[]> {
+  try {
+    if (query.provider === "wikipedia") {
+      const wikipedia = await fetchWikipediaSources(query);
+      if (wikipedia.length > 0) {
+        return wikipedia;
       }
-      return fetchSyntheticSource(query, queryIndex);
-    }),
-  );
+      return buildFallbackSource(query, queryIndex, "Wikipedia returned no matching background page for this prompt.");
+    }
+
+    if (query.provider === "gdelt") {
+      const gdelt = await fetchGdeltSources(query);
+      if (gdelt.length > 0) {
+        return gdelt;
+      }
+      return buildFallbackSource(query, queryIndex, "GDELT returned no recent articles that matched this prompt.");
+    }
+
+    if (query.provider === "rss") {
+      try {
+        const rss = await fetchRssSources(query);
+        if (rss.length > 0) {
+          return rss;
+        }
+      } catch (error) {
+        const figaro = await fetchLeFigaroQuestionDuJour(query).catch(() => []);
+        if (figaro.length > 0) {
+          return figaro;
+        }
+        return buildFallbackSource(query, queryIndex, describeError("Google News RSS", error));
+      }
+
+      const figaro = await fetchLeFigaroQuestionDuJour(query).catch(() => []);
+      if (figaro.length > 0) {
+        return figaro;
+      }
+      return buildFallbackSource(query, queryIndex, "No recent news coverage matched this prompt.");
+    }
+
+    if (query.provider === "reddit") {
+      const reddit = await fetchRedditSources(query);
+      if (reddit.length > 0) {
+        return reddit;
+      }
+      return buildFallbackSource(query, queryIndex, "Reddit returned no relevant public threads for this prompt.");
+    }
+
+    if (query.provider === "google_trends") {
+      const trends = await fetchGoogleTrendsSources(query);
+      if (trends.length > 0) {
+        return trends;
+      }
+      return buildFallbackSource(query, queryIndex, "Google Trends returned no trend in France that clearly overlaps with this prompt.");
+    }
+  } catch (error) {
+    const label =
+      query.provider === "google_trends"
+        ? "Google Trends"
+        : query.provider === "rss"
+          ? "Google News RSS"
+          : query.provider === "gdelt"
+            ? "GDELT"
+            : query.provider === "reddit"
+              ? "Reddit"
+              : "Wikipedia";
+    return buildFallbackSource(query, queryIndex, describeError(label, error));
+  }
+
+  return buildFallbackSource(query, queryIndex, `No usable ${query.provider} result was returned.`);
+}
+
+async function buildRetrievedSources(plan: ReturnType<typeof buildRetrievalPlan>): Promise<RetrievedSource[]> {
+  const allSources = await Promise.all(plan.queries.map((query, queryIndex) => resolveProviderSources(query, queryIndex)));
   const flattened = allSources.flat();
   const deduped = new Map<string, RetrievedSource>();
   for (const source of flattened) {

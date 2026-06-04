@@ -1,1 +1,5 @@
 node_modules/
+.next/
+data/
+dist/
+.env.local

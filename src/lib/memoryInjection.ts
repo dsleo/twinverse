@@ -33,6 +33,7 @@ export interface RetrievalQuery {
 export interface RetrievedSource {
   id: string;
   provider: RetrievalQuery["provider"];
+  provenance: "live" | "fallback";
   title: string;
   snippet: string;
   url?: string;
@@ -299,6 +300,7 @@ async function fetchGdeltSources(query: RetrievalQuery): Promise<RetrievedSource
   return (data.articles ?? []).slice(0, 5).map((article, index) => ({
     id: `gdelt-${slugify(article.url ?? article.title ?? `${query.query}-${index}`)}`,
     provider: "gdelt",
+    provenance: "live",
     title: article.title ?? query.query,
     snippet: article.snippet ?? article.sourceCollection ?? "GDELT article match",
     url: article.url,
@@ -308,6 +310,29 @@ async function fetchGdeltSources(query: RetrievalQuery): Promise<RetrievedSource
     relevanceScore: clamp(0.95 - index * 0.1, 0.2, 0.95),
     tags: ["gdelt", query.freshness, "news"],
   }));
+}
+
+function extractFigaroQuestion(html: string) {
+  const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
+  const twitterTitle = html.match(/<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
+  const jsonLd = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i)?.[1];
+  const headline = ogTitle ?? twitterTitle ?? (jsonLd ? (() => {
+    try {
+      const parsed = JSON.parse(jsonLd) as { name?: string; headline?: string };
+      return parsed.headline ?? parsed.name;
+    } catch {
+      return undefined;
+    }
+  })() : undefined);
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+  const match = text.match(/question du jour.{0,240}/i) ?? text.match(/question.{0,240}/i);
+  return { headline, snippet: match?.[0] };
 }
 
 async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<RetrievedSource[]> {
@@ -320,23 +345,17 @@ async function fetchLeFigaroQuestionDuJour(query: RetrievalQuery): Promise<Retri
     return [];
   }
   const html = await response.text();
-  const lines = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(" ");
-  const match = lines.match(/La Question du Jour.{0,240}/i) ?? lines.match(/question du jour.{0,240}/i);
-  if (!match) {
+  const parsed = extractFigaroQuestion(html);
+  if (!parsed.headline && !parsed.snippet) {
     return [];
   }
   return [
     {
       id: `figaro-question-du-jour-${slugify(query.query)}`,
       provider: "rss",
-      title: "Le Figaro - La Question du Jour",
-      snippet: match[0].slice(0, 220),
+      provenance: "live",
+      title: parsed.headline ?? "Le Figaro - La Question du Jour",
+      snippet: (parsed.snippet ?? parsed.headline ?? "Le Figaro question du jour").slice(0, 220),
       url: "https://video.lefigaro.fr/figaro/la-question-du-jour",
       publishedAt: undefined,
       sourceName: "Le Figaro",
@@ -352,6 +371,7 @@ async function fetchSyntheticSource(query: RetrievalQuery, queryIndex: number): 
     {
       id: `${query.provider}-${queryIndex + 1}-a`,
       provider: query.provider,
+      provenance: "fallback",
       title: `${query.provider.toUpperCase()} result for ${query.query}`,
       snippet: `Synthetic ${query.provider} signal related to ${query.purpose.toLowerCase()}.`,
       url: `https://example.com/${slugify(query.query)}/${query.provider}`,
@@ -401,8 +421,8 @@ function buildContextPacks(
   retrievedSources: RetrievedSource[],
 ) {
   return populationMap.segments.map((segment, index) => ({
-    id: `cp_${index + 1}`,
-    label: segment.label,
+      id: `cp_${index + 1}`,
+      label: segment.label,
     targetSegmentId: segment.id,
     targetPersonaIds: segment.targetPersonaIds,
     exposureProfile: {

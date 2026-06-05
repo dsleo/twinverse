@@ -517,6 +517,88 @@ a.source-tag:hover {
   transform: translateY(-1px);
 }
 
+.lab-mode-shell,
+.lab-daily-stack,
+.lab-readonly-prompt,
+.lab-audience-card,
+.lab-run-meta {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.lab-mode-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.lab-mode-card {
+  display: grid;
+  gap: 0.65rem;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  background: linear-gradient(180deg, color-mix(in oklch, var(--surface-raised) 88%, transparent), var(--surface));
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.lab-mode-card:hover,
+.lab-mode-card.active {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklch, var(--line) 60%, var(--accent) 40%);
+  background: linear-gradient(180deg, color-mix(in oklch, var(--surface-raised) 76%, var(--accent) 24%), var(--surface));
+}
+
+.lab-mode-kicker {
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.lab-mode-card p,
+.lab-audience-card p,
+.lab-mode-note {
+  color: var(--muted);
+}
+
+.lab-readonly-prompt,
+.lab-audience-card {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  background: color-mix(in oklch, var(--surface) 95%, var(--text) 5%);
+}
+
+.lab-readonly-question {
+  font-size: 1.18rem;
+  line-height: 1.45;
+}
+
+.lab-question-date {
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+
+.lab-run-meta {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, max-content));
+}
+
+.lab-mode-note {
+  margin-top: -0.25rem;
+}
+
+@media (min-width: 760px) {
+  .lab-mode-grid,
+  .lab-daily-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .home-editorial,
 .personas-shell {
   display: grid;

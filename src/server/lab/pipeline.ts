@@ -7,11 +7,29 @@ import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
 import { buildReaction } from "./reactions";
 import { retrieveSources } from "./retrieval";
-import { labInputSchema, type LabInput } from "../../lib/labSchemas";
+import { type AudiencePreset, labInputSchema, type LabInput, type PromptSource, type RunMode } from "../../lib/labSchemas";
 
-export async function createLabRun(input: LabInput) {
+export async function createLabRun({
+  input,
+  mode,
+  audiencePreset,
+  promptSnapshot,
+  promptSource,
+}: {
+  input: LabInput;
+  mode: RunMode;
+  audiencePreset: AudiencePreset;
+  promptSnapshot: string;
+  promptSource?: PromptSource;
+}) {
   const parsed = labInputSchema.parse(input);
-  return createRunRecord(parsed);
+  return createRunRecord({
+    input: parsed,
+    mode,
+    audiencePreset,
+    promptSnapshot,
+    promptSource,
+  });
 }
 
 export async function executeLabRun(runId: string) {
@@ -20,7 +38,7 @@ export async function executeLabRun(runId: string) {
     const cache = await loadPersonaSample();
 
     await startStage(runId, "population_mapping", "Assigning the live persona sample to question-specific segments.");
-    const mapped = await mapPopulationToPanel(initialRun.input, cache);
+    const mapped = await mapPopulationToPanel(initialRun.input, cache, initialRun.audiencePreset);
     await updateRun(runId, (run) => ({
       ...run,
       panelSampleVersion: cache.sampleVersion,
@@ -31,6 +49,7 @@ export async function executeLabRun(runId: string) {
     await completeStage(runId, "population_mapping", `Built 5 prompt-specific segments from ${cache.sampleSize} cached dataset personas.`, {
       panelSize: String(mapped.panel.length),
       sampleVersion: cache.sampleVersion,
+      audiencePreset: initialRun.audiencePreset,
     });
 
     await startStage(runId, "retrieval", "Collecting live source signals from configured providers.");

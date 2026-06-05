@@ -2,34 +2,73 @@ import "server-only";
 
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defaultRunSteps, persistedLabRunSchema, type LabInput, type PersistedLabRun, type RunStage, type StageId } from "../../lib/labSchemas";
+import {
+  defaultRunSteps,
+  persistedLabRunSchema,
+  type AudiencePreset,
+  type LabInput,
+  type PersistedLabRun,
+  type PromptSource,
+  type RunMode,
+  type RunStage,
+  type StageId,
+} from "../../lib/labSchemas";
 
-const DATA_ROOT = path.join(process.cwd(), "data");
-const RUNS_DIR = path.join(DATA_ROOT, "lab-runs");
-const PERSONA_DIR = path.join(DATA_ROOT, "personas");
+function dataRoot() {
+  return process.env.LAB_DATA_ROOT || path.join(process.cwd(), "data");
+}
+
+function runsDir() {
+  return path.join(dataRoot(), "lab-runs");
+}
+
+function personaDir() {
+  return path.join(dataRoot(), "personas");
+}
+
+function dailyQuestionsDir() {
+  return path.join(dataRoot(), "daily-questions");
+}
 
 function nowIso() {
   return new Date().toISOString();
 }
 
 async function ensureDirs() {
-  await mkdir(RUNS_DIR, { recursive: true });
-  await mkdir(PERSONA_DIR, { recursive: true });
+  await mkdir(runsDir(), { recursive: true });
+  await mkdir(personaDir(), { recursive: true });
+  await mkdir(dailyQuestionsDir(), { recursive: true });
 }
 
 export function getPersonaCachePath() {
-  return path.join(PERSONA_DIR, "nemotron-france-cache.json");
+  return path.join(personaDir(), "nemotron-france-cache.json");
+}
+
+export function getDailyQuestionCachePath(source: string, questionDate: string) {
+  return path.join(dailyQuestionsDir(), `${source}-${questionDate}.json`);
 }
 
 function getRunPath(runId: string) {
-  return path.join(RUNS_DIR, `${runId}.json`);
+  return path.join(runsDir(), `${runId}.json`);
 }
 
 export function createRunId() {
   return `lab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export async function createRunRecord(input: LabInput) {
+export async function createRunRecord({
+  input,
+  mode,
+  audiencePreset,
+  promptSnapshot,
+  promptSource,
+}: {
+  input: LabInput;
+  mode: RunMode;
+  audiencePreset: AudiencePreset;
+  promptSnapshot: string;
+  promptSource?: PromptSource;
+}) {
   await ensureDirs();
   const createdAt = nowIso();
   const run: PersistedLabRun = {
@@ -37,7 +76,11 @@ export async function createRunRecord(input: LabInput) {
     createdAt,
     updatedAt: createdAt,
     status: "created",
+    mode,
+    audiencePreset,
     input,
+    promptSnapshot,
+    promptSource,
     steps: defaultRunSteps(),
     panel: [],
     contextPacks: [],
@@ -62,12 +105,12 @@ export async function writeRun(run: PersistedLabRun) {
 
 export async function listRuns() {
   await ensureDirs();
-  const entries = await readdir(RUNS_DIR);
+  const entries = await readdir(runsDir());
   const runs = await Promise.all(
     entries
       .filter((entry) => entry.endsWith(".json"))
       .map(async (entry) => {
-        const contents = await readFile(path.join(RUNS_DIR, entry), "utf8");
+        const contents = await readFile(path.join(runsDir(), entry), "utf8");
         return persistedLabRunSchema.parse(JSON.parse(contents));
       }),
   );

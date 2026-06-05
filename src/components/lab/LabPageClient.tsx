@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
-import type { InputType, PersistedLabRun } from "../../lib/labSchemas";
+import { audiencePresetDescriptions, runModeLabels } from "../../lib/labAudience";
+import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
 
 type JumpCard = {
   id: string;
@@ -45,7 +46,22 @@ function activeStage(run: PersistedLabRun | null) {
   return run.steps.find((step) => step.status === "running") ?? run.steps.find((step) => step.status === "failed") ?? null;
 }
 
-export function LabPageClient() {
+function formatQuestionDate(value?: string) {
+  if (!value) {
+    return "Aujourd’hui";
+  }
+
+  const date = new Date(`${value}T12:00:00+02:00`);
+  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(date);
+}
+
+type LabPageClientProps = {
+  fixedMode?: RunMode;
+  showModePicker?: boolean;
+};
+
+export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClientProps) {
+  const [mode, setMode] = useState<RunMode>(fixedMode ?? "manual");
   const [rawInput, setRawInput] = useState("Faut-il construire de nouvelles centrales nucléaires en France ?");
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<PersistedLabRun | null>(null);
@@ -53,6 +69,62 @@ export function LabPageClient() {
   const [selectedReactionId, setSelectedReactionId] = useState("");
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [isPackOpen, setIsPackOpen] = useState(false);
+  const [dailyQuestion, setDailyQuestion] = useState<DailyQuestionPreview | null>(null);
+  const [isDailyQuestionLoading, setIsDailyQuestionLoading] = useState(fixedMode === "le_figaro_daily" || showModePicker);
+
+  const isLeFigaroMode = mode === "le_figaro_daily";
+  const heroTitle = isLeFigaroMode && !showModePicker ? "Le Figaro, as it lands." : "Ask. See how it lands.";
+  const heroLede =
+    isLeFigaroMode && !showModePicker
+      ? ""
+      : "An agentic system combines live context with tailored synthetic personas to simulate audience reaction.";
+
+  useEffect(() => {
+    if (fixedMode) {
+      setMode(fixedMode);
+    }
+  }, [fixedMode]);
+
+  useEffect(() => {
+    if (!isLeFigaroMode && !showModePicker) {
+      setIsDailyQuestionLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadDailyQuestion() {
+      setIsDailyQuestionLoading(true);
+
+      try {
+        const response = await fetch(`/api/lab/daily-question?source=le_figaro&t=${Date.now()}`, { cache: "no-store" });
+        const preview = (await response.json()) as DailyQuestionPreview;
+        if (cancelled) {
+          return;
+        }
+        setDailyQuestion(preview);
+      } catch (nextError) {
+        if (cancelled) {
+          return;
+        }
+        setDailyQuestion({
+          status: "unavailable",
+          source: "le_figaro",
+          message: nextError instanceof Error ? nextError.message : "Unable to load today’s question.",
+        });
+      } finally {
+        if (!cancelled) {
+          setIsDailyQuestionLoading(false);
+        }
+      }
+    }
+
+    void loadDailyQuestion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLeFigaroMode, showModePicker]);
 
   useEffect(() => {
     if (!runId) {
@@ -111,13 +183,15 @@ export function LabPageClient() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          rawInput,
+          mode,
+          rawInput: mode === "manual" ? rawInput : undefined,
           inputType: "question" satisfies InputType,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Unable to start the run.");
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Unable to start the run.");
       }
 
       const body = (await response.json()) as { runId: string };
@@ -168,31 +242,86 @@ export function LabPageClient() {
     [run],
   );
 
+  const leFigaroAvailable = dailyQuestion?.status === "available";
+  const submitDisabled =
+    run?.status === "running" ||
+    (mode === "manual" ? rawInput.trim().length < 10 : isDailyQuestionLoading || !leFigaroAvailable);
+
   return (
     <div className="lab-page page-shell">
       <section className="lab-hero hero-copy">
         <div className="eyebrow">Lab</div>
-        <h1>Ask. See how it lands.</h1>
-        <p className="hero-lede">
-          An agentic system combines live context with tailored synthetic personas to simulate audience reaction.
-        </p>
+        <h1>{heroTitle}</h1>
+        {heroLede ? <p className="hero-lede">{heroLede}</p> : null}
       </section>
+
+      {showModePicker ? (
+        <section className="lab-card lab-mode-shell">
+          <div className="section-heading section-heading-compact">
+            <div>
+              <div className="section-label">Mode</div>
+              <h2>Choose the prompt source</h2>
+            </div>
+          </div>
+
+          <div className="lab-mode-grid" role="list">
+            <button
+              type="button"
+              className={`lab-mode-card ${mode === "manual" ? "active" : ""}`}
+              onClick={() => setMode("manual")}
+              aria-pressed={mode === "manual"}
+            >
+              <span className="lab-mode-kicker">Freeform</span>
+              <strong>{runModeLabels.manual}</strong>
+              <p>Use your own question and keep the default France-wide audience lens.</p>
+            </button>
+
+            <button
+              type="button"
+              className={`lab-mode-card ${mode === "le_figaro_daily" ? "active" : ""}`}
+              onClick={() => setMode("le_figaro_daily")}
+              aria-pressed={mode === "le_figaro_daily"}
+            >
+              <span className="lab-mode-kicker">Daily signal</span>
+              <strong>{runModeLabels.le_figaro_daily}</strong>
+              <p>Run the official question of the day with a panel weighted toward Le Figaro readership.</p>
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="lab-card lab-command">
         <form onSubmit={handleSubmit} className="lab-form">
-          <textarea
-            id="lab-input"
-            value={rawInput}
-            onChange={(event) => setRawInput(event.target.value)}
-            minLength={10}
-            rows={5}
-            aria-describedby="lab-input-error"
-            aria-invalid={Boolean(error)}
-            placeholder="Paste a question, article, proposal, or speech"
-          />
+          {isLeFigaroMode ? (
+            <article className="lab-readonly-prompt">
+              <div className="card-topline">
+                <div>
+                  <div className="section-label">Question du jour</div>
+                  {leFigaroAvailable ? <p className="lab-question-date">{formatQuestionDate(dailyQuestion.promptSource.questionDate)}</p> : null}
+                </div>
+              </div>
+
+              {leFigaroAvailable ? <p className="lab-readonly-question">{dailyQuestion.question}</p> : <p>{dailyQuestion?.message ?? "Loading today’s Le Figaro question."}</p>}
+            </article>
+          ) : (
+            <textarea
+              id="lab-input"
+              value={rawInput}
+              onChange={(event) => setRawInput(event.target.value)}
+              minLength={10}
+              rows={5}
+              aria-describedby="lab-input-error"
+              aria-invalid={Boolean(error)}
+              placeholder="Paste a question, article, proposal, or speech"
+            />
+          )}
+
+          {mode === "manual" ? (
+            <p className="lab-mode-note">{audiencePresetDescriptions.france_general}</p>
+          ) : null}
 
           <div className="lab-command-row">
-            <button type="submit" className="accent-button" disabled={rawInput.trim().length < 10 || run?.status === "running"}>
+            <button type="submit" className="accent-button" disabled={submitDisabled}>
               {run?.status === "running" ? "Running" : "Run pipeline"}
             </button>
             <div className="lab-status" aria-live="polite">
@@ -268,7 +397,7 @@ export function LabPageClient() {
           <div className="section-heading section-heading-compact">
             <div>
               <div className="section-label">Population map</div>
-              <h2>Question-driven segments</h2>
+              <h2>{run.audiencePreset === "le_figaro_reader" ? "Reader-weighted segments" : "Question-driven segments"}</h2>
             </div>
           </div>
           <div className="segment-explorer">
@@ -332,7 +461,7 @@ export function LabPageClient() {
           <div className="section-heading section-heading-compact">
             <div>
               <div className="section-label">Reactions</div>
-              <h2>Evaluated personas</h2>
+              <h2>Persona reactions</h2>
             </div>
           </div>
           <PersonaCarousel items={personaItems} selectedId={selectedReactionId} onToggle={(id) => setSelectedReactionId((current) => (current === id ? "" : id))} />

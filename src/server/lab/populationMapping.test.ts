@@ -129,11 +129,57 @@ describe("mapPopulationToPanel", () => {
         inputType: "question",
       },
       cache,
+      "france_general",
     );
 
     expect(result.assignment.segments).toHaveLength(5);
     expect(result.assignment.panelPersonaIds).toHaveLength(20);
     expect(result.assignment.segments.every((segment) => segment.evaluatedPersonaIds.length === 2)).toBe(true);
     expect(result.assignment.segments[0].memberPersonaIds.length).toBeGreaterThanOrEqual(result.assignment.segments[4].memberPersonaIds.length);
+  });
+
+  it("biases panel selection when using the Le Figaro audience preset", async () => {
+    const cache: PersonaCache = {
+      dataset: "nvidia/Nemotron-Personas-France",
+      fetchedAt: new Date().toISOString(),
+      sampleVersion: "2026-06-04",
+      sampleSize: 40,
+      personas: [
+        ...Array.from({ length: 20 }, (_, index) =>
+          makePersona(index, {
+            assignmentMetadata: {
+              ...makePersona(index).assignmentMetadata,
+              life_stage: "retirement_age",
+              employment_class: "retired",
+              income_posture: "affluent",
+              housing_status: "family_home_profile",
+              trust_orientation_tags: ["pragmatic", "proof_seeking", "institution_reliant"],
+            },
+          }),
+        ),
+        ...Array.from({ length: 20 }, (_, index) =>
+          makePersona(index + 20, {
+            assignmentMetadata: {
+              ...makePersona(index + 20).assignmentMetadata,
+              life_stage: "young_adult",
+              employment_class: "out_of_work",
+              income_posture: "cost_sensitive",
+              trust_orientation_tags: ["open_to_argument"],
+            },
+          }),
+        ),
+      ],
+    };
+
+    const result = await mapPopulationToPanel(
+      {
+        rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+        inputType: "question",
+      },
+      cache,
+      "le_figaro_reader",
+    );
+
+    expect(result.panel.every((persona) => persona.assignmentMetadata.life_stage !== "young_adult")).toBe(true);
   });
 });

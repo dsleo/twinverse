@@ -159,24 +159,44 @@ vi.mock("./aggregation", () => ({
 import { createLabRun, executeLabRun } from "./pipeline";
 import { readRun } from "./persistence";
 
-const dataDir = path.join(process.cwd(), "data");
+const dataDir = path.join(process.cwd(), ".tmp-tests", "pipeline");
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  process.env.LAB_DATA_ROOT = dataDir;
   await rm(dataDir, { recursive: true, force: true });
+  delete process.env.LAB_DATA_ROOT;
 });
 
 describe("executeLabRun", () => {
   it("persists a completed run with real stage transitions and ten evaluated personas", async () => {
+    process.env.LAB_DATA_ROOT = dataDir;
     const run = await createLabRun({
-      rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
-      inputType: "question",
+      input: {
+        rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+        inputType: "question",
+      },
+      mode: "le_figaro_daily",
+      audiencePreset: "le_figaro_reader",
+      promptSnapshot: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+      promptSource: {
+        publisher: "Le Figaro",
+        label: "Question du jour",
+        url: "https://video.lefigaro.fr/figaro/la-question-du-jour",
+        questionDate: "2026-06-05",
+        fetchedAt: new Date().toISOString(),
+        cacheStatus: "fresh",
+      },
     });
 
     await executeLabRun(run.id);
     const persisted = await readRun(run.id);
 
     expect(persisted.status).toBe("completed");
+    expect(persisted.mode).toBe("le_figaro_daily");
+    expect(persisted.audiencePreset).toBe("le_figaro_reader");
+    expect(persisted.promptSnapshot).toContain("centrales nucléaires");
+    expect(persisted.promptSource?.publisher).toBe("Le Figaro");
     expect(persisted.steps.every((step) => step.status === "completed")).toBe(true);
     expect(persisted.contextPacks).toHaveLength(5);
     expect(persisted.reactions).toHaveLength(10);

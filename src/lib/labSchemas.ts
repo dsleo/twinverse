@@ -3,6 +3,12 @@ import { z } from "zod";
 export const inputTypeSchema = z.enum(["question", "article", "proposal", "speech", "poll_question", "other"]);
 export type InputType = z.infer<typeof inputTypeSchema>;
 
+export const runModeSchema = z.enum(["manual", "le_figaro_daily"]);
+export type RunMode = z.infer<typeof runModeSchema>;
+
+export const audiencePresetSchema = z.enum(["france_general", "le_figaro_reader"]);
+export type AudiencePreset = z.infer<typeof audiencePresetSchema>;
+
 export const providerSchema = z.enum(["wikipedia", "rss", "gdelt", "reddit", "google_trends"]);
 export type Provider = z.infer<typeof providerSchema>;
 
@@ -111,6 +117,18 @@ export const labInputSchema = z.object({
   inputType: inputTypeSchema,
 });
 export type LabInput = z.infer<typeof labInputSchema>;
+
+export const promptSourceSchema = z.object({
+  publisher: z.string().min(1),
+  label: z.string().min(1),
+  url: z.string().url(),
+  questionDate: z.string().min(1),
+  fetchedAt: z.string().datetime(),
+  cacheStatus: z.enum(["fresh", "cached"]),
+  headline: z.string().min(1).optional(),
+  excerpt: z.string().min(1).optional(),
+});
+export type PromptSource = z.infer<typeof promptSourceSchema>;
 
 export const populationSegmentSpecSchema = z.object({
   id: z.string().min(1),
@@ -245,7 +263,11 @@ export const persistedLabRunSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   status: z.enum(["created", "running", "completed", "failed"]),
+  mode: runModeSchema,
+  audiencePreset: audiencePresetSchema,
   input: labInputSchema,
+  promptSnapshot: z.string().min(10),
+  promptSource: promptSourceSchema.optional(),
   steps: z.array(runStageSchema).length(5),
   panelSampleVersion: z.string().optional(),
   panel: z.array(normalizedPersonaSchema).default([]),
@@ -266,6 +288,21 @@ export const persistedLabRunSchema = z.object({
   error: z.string().optional(),
 });
 export type PersistedLabRun = z.infer<typeof persistedLabRunSchema>;
+
+export const dailyQuestionPreviewSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("available"),
+    source: z.literal("le_figaro"),
+    question: z.string().min(10),
+    promptSource: promptSourceSchema,
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    source: z.literal("le_figaro"),
+    message: z.string().min(1),
+  }),
+]);
+export type DailyQuestionPreview = z.infer<typeof dailyQuestionPreviewSchema>;
 
 export const defaultRunSteps = (): RunStage[] => [
   { id: "population_mapping", label: "Population mapping", status: "pending", diagnostics: {} },

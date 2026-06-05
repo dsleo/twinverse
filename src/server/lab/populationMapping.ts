@@ -2,10 +2,13 @@ import "server-only";
 
 import { z } from "zod";
 import { callStructuredModel } from "./openaiStructured";
+import { audiencePresetAffinityScore, audiencePresetDescription } from "./audiencePresets";
 import { metadataTaxonomy } from "./personaSample";
 import {
+  audiencePresetSchema,
   populationAssignmentResultSchema,
   populationSegmentSpecSchema,
+  type AudiencePreset,
   type LabInput,
   type MetadataTagFilter,
   type NormalizedPersona,
@@ -48,7 +51,7 @@ function tagMatches(persona: NormalizedPersona, filter: MetadataTagFilter) {
   return filter.values.includes(value);
 }
 
-function scorePersona(persona: NormalizedPersona, segment: PopulationSegmentSpec) {
+function scorePersona(persona: NormalizedPersona, segment: PopulationSegmentSpec, audiencePreset: AudiencePreset) {
   if (segment.exclusionTags.some((filter) => tagMatches(persona, filter))) {
     return -100;
   }
@@ -79,6 +82,7 @@ function scorePersona(persona: NormalizedPersona, segment: PopulationSegmentSpec
     }
   }
 
+  score += audiencePresetAffinityScore(audiencePreset, persona.assignmentMetadata);
   return score;
 }
 
@@ -112,12 +116,14 @@ function assignedPersonaIds(segmentId: string, panel: NormalizedPersona[], segme
   return pool.filter((persona) => panelIds.has(persona.id)).map((persona) => persona.id);
 }
 
-export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache) {
+export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache, audiencePreset: AudiencePreset = "france_general") {
+  const audience = audiencePresetSchema.parse(audiencePreset);
   const taxonomy = metadataTaxonomy(cache.personas);
   const promptDimensionList = promptDimensions(input.rawInput);
   const system = [
     "You are a French public-opinion segmentation analyst.",
     "Return exactly five population segments.",
+    `Audience lens: ${audiencePresetDescription(audience)}.`,
     "Every segment must use inclusionTags and exclusionTags that map directly onto the provided metadata families and values.",
     "Do not invent families that are not present in the taxonomy.",
     "Favor segments that reflect who is materially affected, who bears cost/risk, who depends on services, who evaluates implementation detail, and who filters through trust/convenience.",
@@ -126,6 +132,8 @@ export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache)
   const user = JSON.stringify(
     {
       input,
+      audiencePreset: audience,
+      audienceDescription: audiencePresetDescription(audience),
       promptDimensions: promptDimensionList,
       metadataTaxonomy: taxonomy,
       instructions: {
@@ -164,7 +172,7 @@ export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache)
       id: segment.id || slugify(segment.label),
     },
     personas: [...cache.personas]
-      .map((persona) => ({ persona, score: scorePersona(persona, segment) }))
+      .map((persona) => ({ persona, score: scorePersona(persona, segment, audience) }))
       .sort((a, b) => b.score - a.score || a.persona.name.localeCompare(b.persona.name))
       .map((entry) => entry.persona),
   }));

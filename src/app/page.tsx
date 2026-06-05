@@ -14,6 +14,9 @@ export default function Page() {
             <Link href="/lab" className="accent-button home-cta">
               Open the Lab
             </Link>
+            <Link href="/lab/figaro" className="ghost-button home-cta">
+              Question du jour
+            </Link>
             <Link href="/personas" className="ghost-button home-cta">
               View Personas
             </Link>

@@ -3,7 +3,7 @@
 @import "./styles/layout.css";
 @import "./styles/components.css";
 
-.memory-page {
+.lab-page {
   display: grid;
   gap: clamp(1rem, 1.5vw, 1.35rem);
 }
@@ -14,7 +14,7 @@
   gap: var(--space-2);
 }
 
-.memory-card,
+.lab-card,
 .sub-card,
 .source-row {
   border: 1px solid var(--line);
@@ -23,7 +23,7 @@
   padding: clamp(1rem, 1.8vw, 1.35rem);
 }
 
-.memory-hero {
+.lab-hero {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -36,16 +36,16 @@
   background: linear-gradient(180deg, color-mix(in oklch, var(--surface-raised) 88%, var(--accent) 12%), var(--surface));
 }
 
-.memory-command {
+.lab-command {
   padding-top: 1rem;
 }
 
-.memory-form {
+.lab-form {
   display: grid;
   gap: 0.9rem;
 }
 
-.memory-page textarea {
+.lab-page textarea {
   width: 100%;
   border-radius: 0.95rem;
   border: 1px solid var(--line);
@@ -54,80 +54,80 @@
   padding: 1rem 1.05rem;
 }
 
-.memory-page textarea::placeholder {
+.lab-page textarea::placeholder {
   color: var(--quiet);
 }
 
-.memory-command-row,
-.memory-status,
+.lab-command-row,
+.lab-status,
 .source-row-topline,
 .segment-button-topline {
   display: flex;
   gap: var(--space-2);
 }
 
-.memory-command-row {
+.lab-command-row {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
 }
 
-.memory-status {
+.lab-status {
   align-items: center;
   color: var(--muted);
 }
 
-.memory-status p {
+.lab-status p {
   color: var(--muted);
 }
 
-.memory-summary {
+.lab-summary {
   border-color: var(--line-strong);
   background: color-mix(in oklch, var(--surface) 78%, var(--accent-soft) 22%);
 }
 
-.memory-step-card {
+.lab-step-card {
   border: 1px solid var(--line);
   border-radius: 1.35rem;
   background: color-mix(in oklch, var(--surface-raised) 84%, var(--bg) 16%);
   padding: 0.9rem 1rem;
 }
 
-.memory-step-card p {
+.lab-step-card p {
   margin-top: 0.45rem;
   color: var(--muted);
 }
 
-.memory-step-running {
+.lab-step-running {
   border-color: color-mix(in oklch, var(--line) 66%, var(--accent) 34%);
 }
 
-.memory-step-completed {
+.lab-step-completed {
   border-color: color-mix(in oklch, var(--line) 60%, var(--support) 40%);
 }
 
-.memory-step-failed {
+.lab-step-failed {
   border-color: color-mix(in oklch, var(--line) 50%, var(--oppose) 50%);
 }
 
-.memory-collapsible {
+.lab-collapsible {
   display: grid;
   gap: 1rem;
 }
 
-.memory-summary-toggle {
+.lab-summary-toggle {
   list-style: none;
   cursor: pointer;
 }
 
-.memory-summary-toggle::-webkit-details-marker {
+.lab-summary-toggle::-webkit-details-marker {
   display: none;
 }
 
 .summary-grid,
 .source-provenance-grid,
 .segment-list,
-.memory-step-list {
+.lab-step-list {
   display: grid;
   gap: 0.8rem;
 }
@@ -192,33 +192,33 @@
   color: var(--muted);
 }
 
-.memory-reaction-detail {
+.lab-reaction-detail {
   margin-top: var(--space-3);
 }
 
-.memory-persona-meta {
+.lab-persona-meta {
   color: var(--quiet);
 }
 
-.memory-stance {
+.lab-stance {
   font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
   color: var(--quiet);
 }
 
-.memory-stance-strong_support,
-.memory-stance-support {
+.lab-stance-strong_support,
+.lab-stance-support {
   color: var(--support);
 }
 
-.memory-stance-oppose,
-.memory-stance-strong_oppose {
+.lab-stance-oppose,
+.lab-stance-strong_oppose {
   color: var(--oppose);
 }
 
-.memory-stance-mixed,
-.memory-stance-uncertain {
+.lab-stance-mixed,
+.lab-stance-uncertain {
   color: var(--undecided);
 }
 
@@ -308,7 +308,7 @@ a.source-tag:hover {
 }
 
 .segment-preview p,
-.memory-warning {
+.lab-warning {
   color: var(--muted);
 }
 
@@ -344,7 +344,7 @@ a.source-tag:hover {
   font-size: 0.86rem;
 }
 
-.memory-warning {
+.lab-warning {
   margin-top: var(--space-3);
   font-size: 0.88rem;
   line-height: 1.45;
@@ -356,7 +356,7 @@ a.source-tag:hover {
   line-height: 1.45;
 }
 
-.memory-pack-dialog {
+.lab-pack-dialog {
   position: fixed;
   inset: 0;
   display: grid;
@@ -366,17 +366,17 @@ a.source-tag:hover {
   background: transparent;
 }
 
-.memory-pack-dialog::backdrop {
+.lab-pack-dialog::backdrop {
   background: transparent;
 }
 
-.memory-pack-dialog-backdrop {
+.lab-pack-dialog-backdrop {
   position: absolute;
   inset: 0;
   background: color-mix(in oklch, var(--bg) 84%, transparent);
 }
 
-.memory-pack-sheet {
+.lab-pack-sheet {
   position: relative;
   z-index: 1;
   width: min(42rem, calc(100vw - 2rem));
@@ -388,7 +388,7 @@ a.source-tag:hover {
   padding: 1.15rem;
 }
 
-.memory-error {
+.lab-error {
   color: color-mix(in oklch, var(--oppose) 72%, var(--text) 28%);
 }
 
@@ -397,7 +397,7 @@ a.source-tag:hover {
   min-height: 44px;
 }
 
-.memory-page .accent-button {
+.lab-page .accent-button {
   width: fit-content;
 }
 
@@ -650,8 +650,8 @@ a.source-tag:hover {
     justify-content: center;
   }
 
-  .memory-command-row,
-  .memory-status {
+  .lab-command-row,
+  .lab-status {
     align-items: stretch;
     flex-direction: column;
   }

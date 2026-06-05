@@ -27,7 +27,7 @@ let cachedClient: OpenAI | null = null;
 
 function getClient() {
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is missing. Add it to .env.local before running the real memory pipeline.");
+    throw new Error("OPENAI_API_KEY is missing. Add it to .env.local before running the real lab pipeline.");
   }
 
   cachedClient ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

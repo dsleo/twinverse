@@ -6,13 +6,13 @@ import { metadataTaxonomy } from "./personaSample";
 import {
   populationAssignmentResultSchema,
   populationSegmentSpecSchema,
-  type MemoryInput,
+  type LabInput,
   type MetadataTagFilter,
   type NormalizedPersona,
   type PersonaCache,
   type PopulationAssignmentResult,
   type PopulationSegmentSpec,
-} from "../../lib/memorySchemas";
+} from "../../lib/labSchemas";
 
 const populationMapSchema = z.object({
   promptSummary: z.string().min(1),
@@ -112,7 +112,7 @@ function assignedPersonaIds(segmentId: string, panel: NormalizedPersona[], segme
   return pool.filter((persona) => panelIds.has(persona.id)).map((persona) => persona.id);
 }
 
-export async function mapPopulationToPanel(input: MemoryInput, cache: PersonaCache) {
+export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache) {
   const taxonomy = metadataTaxonomy(cache.personas);
   const promptDimensionList = promptDimensions(input.rawInput);
   const system = [

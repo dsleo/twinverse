@@ -7,14 +7,14 @@ import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
 import { buildReaction } from "./reactions";
 import { retrieveSources } from "./retrieval";
-import { memoryInputSchema, type MemoryInput } from "../../lib/memorySchemas";
+import { labInputSchema, type LabInput } from "../../lib/labSchemas";
 
-export async function createMemoryRun(input: MemoryInput) {
-  const parsed = memoryInputSchema.parse(input);
+export async function createLabRun(input: LabInput) {
+  const parsed = labInputSchema.parse(input);
   return createRunRecord(parsed);
 }
 
-export async function executeMemoryRun(runId: string) {
+export async function executeLabRun(runId: string) {
   try {
     const initialRun = await readRun(runId);
     const cache = await loadPersonaSample();

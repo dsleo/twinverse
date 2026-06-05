@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readRun } from "../../../../../server/memory/persistence";
+import { readRun } from "../../../../../server/lab/persistence";
 
 export const runtime = "nodejs";
 

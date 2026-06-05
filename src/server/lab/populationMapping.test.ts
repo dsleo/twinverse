@@ -69,7 +69,7 @@ vi.mock("./openaiStructured", () => ({
 }));
 
 import { mapPopulationToPanel } from "./populationMapping";
-import type { PersonaCache } from "../../lib/memorySchemas";
+import type { PersonaCache } from "../../lib/labSchemas";
 
 function makePersona(index: number, overrides: Partial<PersonaCache["personas"][number]> = {}): PersonaCache["personas"][number] {
   const employmentClasses = ["working_class", "service_employee", "retired", "executive_professional", "self_employed"] as const;

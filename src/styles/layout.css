@@ -79,7 +79,7 @@
 }
 
 .personas-hero h1,
-.memory-hero h1 {
+.lab-hero h1 {
   max-width: 16ch;
 }
 
@@ -195,7 +195,7 @@
   }
 
   .personas-hero h1,
-  .memory-hero h1 {
+  .lab-hero h1 {
     max-width: 18ch;
   }
 }

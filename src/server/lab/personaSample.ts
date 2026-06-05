@@ -10,7 +10,7 @@ import {
   type NormalizedPersona,
   type PersonaAssignmentMetadata,
   type PersonaCache,
-} from "../../lib/memorySchemas";
+} from "../../lib/labSchemas";
 
 const DATASET_NAME = "nvidia/Nemotron-Personas-France";
 const DEFAULT_SAMPLE_SIZE = 100;

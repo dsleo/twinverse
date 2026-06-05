@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { MemoryInput, Provider, ProviderOutcome, ProviderOutcomeStatus, RetrievedSource, RetrievalResult } from "../../lib/memorySchemas";
-import { retrievalResultSchema } from "../../lib/memorySchemas";
+import type { LabInput, Provider, ProviderOutcome, ProviderOutcomeStatus, RetrievedSource, RetrievalResult } from "../../lib/labSchemas";
+import { retrievalResultSchema } from "../../lib/labSchemas";
 
 type ProviderResult = {
   outcome: ProviderOutcome;
@@ -49,7 +49,7 @@ function buildSearchPhrase(input: string) {
   return keywords.length > 0 ? keywords.join(" ") : input;
 }
 
-function buildQueries(input: MemoryInput): QueryPlan {
+function buildQueries(input: LabInput): QueryPlan {
   const searchPhrase = buildSearchPhrase(input.rawInput);
   return [
     { provider: "wikipedia", query: input.rawInput, freshness: "background" },
@@ -145,7 +145,7 @@ function splitItems(xml: string) {
 async function fetchJson(url: string, provider: Provider) {
   const response = await fetch(url, {
     headers: {
-      "user-agent": "tweenverse-memory-injection/2.0",
+      "user-agent": "tweenverse-lab/2.0",
       accept: "application/json,text/plain,*/*",
     },
     cache: "no-store",
@@ -163,7 +163,7 @@ async function fetchJson(url: string, provider: Provider) {
 async function fetchText(url: string, provider: Provider, accept: string) {
   const response = await fetch(url, {
     headers: {
-      "user-agent": "tweenverse-memory-injection/2.0",
+      "user-agent": "tweenverse-lab/2.0",
       accept,
     },
     cache: "no-store",
@@ -427,7 +427,7 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
   }
 }
 
-export async function retrieveSources(input: MemoryInput) {
+export async function retrieveSources(input: LabInput) {
   const queries = buildQueries(input);
   const results = await Promise.all(queries.map((query) => runProvider(query.provider, query.query)));
   const sources = results

@@ -44,4 +44,4 @@ This file documents the pages that existed before the Next.js migration. They ar
 
 - Original standalone memory demo before the server-backed rewrite.
 - Collected a prompt locally, ran the synthetic pipeline in the browser, and rendered population mapping, retrieval planning, context packs, reactions, divergence, and run history.
-- Has since been replaced by the current `/memory` route and server API flow.
+- Has since been replaced by the current `/lab` route and server API flow.

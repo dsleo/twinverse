@@ -2,10 +2,10 @@ import "server-only";
 
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defaultRunSteps, persistedMemoryRunSchema, type MemoryInput, type PersistedMemoryRun, type RunStage, type StageId } from "../../lib/memorySchemas";
+import { defaultRunSteps, persistedLabRunSchema, type LabInput, type PersistedLabRun, type RunStage, type StageId } from "../../lib/labSchemas";
 
 const DATA_ROOT = path.join(process.cwd(), "data");
-const RUNS_DIR = path.join(DATA_ROOT, "memory-runs");
+const RUNS_DIR = path.join(DATA_ROOT, "lab-runs");
 const PERSONA_DIR = path.join(DATA_ROOT, "personas");
 
 function nowIso() {
@@ -26,13 +26,13 @@ function getRunPath(runId: string) {
 }
 
 export function createRunId() {
-  return `memory-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `lab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export async function createRunRecord(input: MemoryInput) {
+export async function createRunRecord(input: LabInput) {
   await ensureDirs();
   const createdAt = nowIso();
-  const run: PersistedMemoryRun = {
+  const run: PersistedLabRun = {
     id: createRunId(),
     createdAt,
     updatedAt: createdAt,
@@ -51,10 +51,10 @@ export async function createRunRecord(input: MemoryInput) {
 export async function readRun(runId: string) {
   await ensureDirs();
   const contents = await readFile(getRunPath(runId), "utf8");
-  return persistedMemoryRunSchema.parse(JSON.parse(contents));
+  return persistedLabRunSchema.parse(JSON.parse(contents));
 }
 
-export async function writeRun(run: PersistedMemoryRun) {
+export async function writeRun(run: PersistedLabRun) {
   await ensureDirs();
   const nextRun = { ...run, updatedAt: nowIso() };
   await writeFile(getRunPath(run.id), JSON.stringify(nextRun, null, 2), "utf8");
@@ -68,14 +68,14 @@ export async function listRuns() {
       .filter((entry) => entry.endsWith(".json"))
       .map(async (entry) => {
         const contents = await readFile(path.join(RUNS_DIR, entry), "utf8");
-        return persistedMemoryRunSchema.parse(JSON.parse(contents));
+        return persistedLabRunSchema.parse(JSON.parse(contents));
       }),
   );
 
   return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function updateRun(runId: string, updater: (run: PersistedMemoryRun) => PersistedMemoryRun | Promise<PersistedMemoryRun>) {
+export async function updateRun(runId: string, updater: (run: PersistedLabRun) => PersistedLabRun | Promise<PersistedLabRun>) {
   const run = await readRun(runId);
   const nextRun = await updater(run);
   await writeRun(nextRun);

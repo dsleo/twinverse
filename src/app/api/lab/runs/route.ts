@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { inputTypeSchema } from "../../../../lib/memorySchemas";
-import { createMemoryRun, executeMemoryRun } from "../../../../server/memory/pipeline";
-import { listRuns } from "../../../../server/memory/persistence";
+import { inputTypeSchema } from "../../../../lib/labSchemas";
+import { createLabRun, executeLabRun } from "../../../../server/lab/pipeline";
+import { listRuns } from "../../../../server/lab/persistence";
 
 export const runtime = "nodejs";
 
@@ -12,12 +12,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { rawInput?: string; inputType?: string };
-  const run = await createMemoryRun({
+  const run = await createLabRun({
     rawInput: body.rawInput ?? "",
     inputType: inputTypeSchema.catch("question").parse(body.inputType),
   });
 
-  void executeMemoryRun(run.id);
+  void executeLabRun(run.id);
 
   return NextResponse.json({ runId: run.id }, { status: 202 });
 }

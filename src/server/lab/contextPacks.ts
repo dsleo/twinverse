@@ -6,10 +6,10 @@ import {
   contextPackSchema,
   type AssignedSegment,
   type ContextPack,
-  type MemoryInput,
+  type LabInput,
   type NormalizedPersona,
   type RetrievedSource,
-} from "../../lib/memorySchemas";
+} from "../../lib/labSchemas";
 
 const contextPackOutputSchema = contextPackSchema.omit({
   id: true,
@@ -17,7 +17,7 @@ const contextPackOutputSchema = contextPackSchema.omit({
   supportingSourceIds: true,
 });
 
-export async function buildContextPack(input: MemoryInput, segment: AssignedSegment, personas: NormalizedPersona[], sources: RetrievedSource[]) {
+export async function buildContextPack(input: LabInput, segment: AssignedSegment, personas: NormalizedPersona[], sources: RetrievedSource[]) {
   const system = [
     "You build compact context packs for a French synthetic-audience simulation.",
     "Return a concise segment briefing grounded only in the supplied prompt, personas, and sources.",

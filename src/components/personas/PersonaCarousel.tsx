@@ -31,7 +31,7 @@ export function PersonaCarousel({ items, selectedId, onToggle }: PersonaCarousel
                 {item.badge ? <span className={item.badgeClassName}>{item.badge}</span> : null}
               </div>
               <p className="persona-role">{item.subtitle}</p>
-              {item.meta ? <p className="memory-persona-meta">{item.meta}</p> : null}
+              {item.meta ? <p className="lab-persona-meta">{item.meta}</p> : null}
             </button>
           </article>
         );

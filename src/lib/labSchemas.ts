@@ -106,11 +106,11 @@ export const personaCacheSchema = z.object({
 });
 export type PersonaCache = z.infer<typeof personaCacheSchema>;
 
-export const memoryInputSchema = z.object({
+export const labInputSchema = z.object({
   rawInput: z.string().min(10),
   inputType: inputTypeSchema,
 });
-export type MemoryInput = z.infer<typeof memoryInputSchema>;
+export type LabInput = z.infer<typeof labInputSchema>;
 
 export const populationSegmentSpecSchema = z.object({
   id: z.string().min(1),
@@ -240,12 +240,12 @@ export const runStageSchema = z.object({
 });
 export type RunStage = z.infer<typeof runStageSchema>;
 
-export const persistedMemoryRunSchema = z.object({
+export const persistedLabRunSchema = z.object({
   id: z.string().min(1),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   status: z.enum(["created", "running", "completed", "failed"]),
-  input: memoryInputSchema,
+  input: labInputSchema,
   steps: z.array(runStageSchema).length(5),
   panelSampleVersion: z.string().optional(),
   panel: z.array(normalizedPersonaSchema).default([]),
@@ -265,7 +265,7 @@ export const persistedMemoryRunSchema = z.object({
   ).default([]),
   error: z.string().optional(),
 });
-export type PersistedMemoryRun = z.infer<typeof persistedMemoryRunSchema>;
+export type PersistedLabRun = z.infer<typeof persistedLabRunSchema>;
 
 export const defaultRunSteps = (): RunStage[] => [
   { id: "population_mapping", label: "Population mapping", status: "pending", diagnostics: {} },

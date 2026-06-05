@@ -11,7 +11,7 @@ export default function Page() {
         <section className="home-hero home-surface">
           <h1>Predict the future through popular wisdom.</h1>
           <div className="cta-row hero-actions home-cta-row">
-            <Link href="/memory" className="accent-button home-cta">
+            <Link href="/lab" className="accent-button home-cta">
               Open the Lab
             </Link>
             <Link href="/personas" className="ghost-button home-cta">

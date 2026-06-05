@@ -1,9 +1,9 @@
 import "server-only";
 
-import { aggregationResultSchema, type AssignedSegment, type ContextPack, type MemoryInput, type ReactionResult, type RetrievedSource } from "../../lib/memorySchemas";
+import { aggregationResultSchema, type AssignedSegment, type ContextPack, type LabInput, type ReactionResult, type RetrievedSource } from "../../lib/labSchemas";
 import { callStructuredModel } from "./openaiStructured";
 
-export async function buildAggregation(input: MemoryInput, segments: AssignedSegment[], contextPacks: ContextPack[], reactions: ReactionResult[], sources: RetrievedSource[]) {
+export async function buildAggregation(input: LabInput, segments: AssignedSegment[], contextPacks: ContextPack[], reactions: ReactionResult[], sources: RetrievedSource[]) {
   const system = [
     "You aggregate persona-level reactions into a concise divergence report.",
     "Speak only about the evaluated personas. Do not imply that unevaluated personas were directly simulated.",

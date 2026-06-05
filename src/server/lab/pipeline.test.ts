@@ -156,7 +156,7 @@ vi.mock("./aggregation", () => ({
   })),
 }));
 
-import { createMemoryRun, executeMemoryRun } from "./pipeline";
+import { createLabRun, executeLabRun } from "./pipeline";
 import { readRun } from "./persistence";
 
 const dataDir = path.join(process.cwd(), "data");
@@ -166,14 +166,14 @@ afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
-describe("executeMemoryRun", () => {
+describe("executeLabRun", () => {
   it("persists a completed run with real stage transitions and ten evaluated personas", async () => {
-    const run = await createMemoryRun({
+    const run = await createLabRun({
       rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
       inputType: "question",
     });
 
-    await executeMemoryRun(run.id);
+    await executeLabRun(run.id);
     const persisted = await readRun(run.id);
 
     expect(persisted.status).toBe("completed");

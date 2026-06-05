@@ -15,7 +15,7 @@ const displayFont = Outfit({
 
 export const metadata: Metadata = {
   title: "Tweenverse",
-  description: "Editorial prediction lab for grounded synthetic personas and memory injection.",
+  description: "Editorial prediction lab for grounded synthetic personas and agentic audience simulation.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

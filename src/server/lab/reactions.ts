@@ -1,6 +1,6 @@
 import "server-only";
 
-import { reactionResultSchema, type AssignedSegment, type ContextPack, type MemoryInput, type NormalizedPersona, type RetrievedSource } from "../../lib/memorySchemas";
+import { reactionResultSchema, type AssignedSegment, type ContextPack, type LabInput, type NormalizedPersona, type RetrievedSource } from "../../lib/labSchemas";
 import { callStructuredModel } from "./openaiStructured";
 
 const reactionOutputSchema = reactionResultSchema.omit({
@@ -10,7 +10,7 @@ const reactionOutputSchema = reactionResultSchema.omit({
 });
 
 export async function buildReaction(
-  input: MemoryInput,
+  input: LabInput,
   segment: AssignedSegment,
   persona: NormalizedPersona,
   contextPack: ContextPack,

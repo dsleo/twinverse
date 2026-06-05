@@ -64,6 +64,13 @@ export const metadataTagFilterSchema = z.object({
 });
 export type MetadataTagFilter = z.infer<typeof metadataTagFilterSchema>;
 
+export const rankingSignalSchema = z.object({
+  family: z.union([scalarMetadataFamilySchema, vectorMetadataFamilySchema]),
+  values: z.array(z.string().min(1)).min(1),
+  weight: z.number().positive().max(3).optional(),
+});
+export type RankingSignal = z.infer<typeof rankingSignalSchema>;
+
 export const personaAssignmentMetadataSchema = z.object({
   life_stage: z.string().min(1),
   household_type: z.string().min(1),
@@ -139,6 +146,7 @@ export const populationSegmentSpecSchema = z.object({
   inclusionTags: z.array(metadataTagFilterSchema).min(1),
   exclusionTags: z.array(metadataTagFilterSchema).default([]),
   preferredDiversityHints: z.array(z.string().min(1)).default([]),
+  rankingSignals: z.array(rankingSignalSchema).default([]),
   rankingCriteria: z.array(z.string().min(1)).min(1),
 });
 export type PopulationSegmentSpec = z.infer<typeof populationSegmentSpecSchema>;

@@ -49,6 +49,21 @@ function pickString(row: Record<string, unknown>, keys: string[], fallback: stri
   return fallback;
 }
 
+function normalizedText(...values: string[]) {
+  return values
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function includesAny(text: string, needles: string[]) {
+  return needles.some((needle) => text.includes(normalizedText(needle)));
+}
+
 function pickNumber(row: Record<string, unknown>, keys: string[], fallback: number) {
   for (const key of keys) {
     const value = row[key];
@@ -66,12 +81,12 @@ function pickNumber(row: Record<string, unknown>, keys: string[], fallback: numb
 }
 
 function inferHouseholdType(household: string) {
-  const text = household.toLowerCase();
-  if (text.includes("alone") || text.includes("solo")) {
-    return "single_adult";
-  }
-  if (text.includes("children") || text.includes("family")) {
+  const text = normalizedText(household);
+  if (includesAny(text, ["famille monoparentale", "avec enfant", "avec enfants", "children", "family"])) {
     return "family_household";
+  }
+  if (includesAny(text, ["personne seule", "vit seule", "single", "alone", "solo", "celibataire"])) {
+    return "single_adult";
   }
   if (text.includes("couple")) {
     return "couple_without_children";
@@ -93,77 +108,91 @@ function inferLifeStage(age: number) {
 }
 
 function inferEmploymentClass(occupation: string) {
-  const text = occupation.toLowerCase();
+  const text = normalizedText(occupation);
   if (text.includes("retrait")) {
     return "retired";
   }
-  if (text.includes("cadre") || text.includes("profession intellectuelle")) {
+  if (includesAny(text, ["cadre", "profession intellectuelle", "ingenieur", "consultant", "directeur"])) {
     return "executive_professional";
   }
-  if (text.includes("artisan") || text.includes("commer") || text.includes("entreprise")) {
+  if (includesAny(text, ["artisan", "commerc", "entreprise", "boulanger", "independant"])) {
     return "self_employed";
   }
-  if (text.includes("interm")) {
+  if (includesAny(text, ["interm", "technicien", "infirm", "enseign"])) {
     return "intermediate_professional";
   }
-  if (text.includes("ouvrier")) {
+  if (includesAny(text, ["ouvrier", "manutention", "chantier", "atelier"])) {
     return "working_class";
   }
-  if (text.includes("employ")) {
+  if (includesAny(text, ["employ", "administratif", "vente", "accueil", "fonctionnaire"])) {
     return "service_employee";
   }
-  if (text.includes("sans activité")) {
+  if (includesAny(text, ["sans activite", "sans emploi", "inactif", "autres sans activite professionnelle"])) {
     return "out_of_work";
   }
   return "other";
 }
 
-function inferIncomePosture(economicPosture: string) {
-  const text = economicPosture.toLowerCase();
-  if (text.includes("affluent")) {
+function inferIncomePosture(economicPosture: string, employmentClass: string, householdType: string, narrative: string) {
+  const text = normalizedText(economicPosture, narrative);
+  if (includesAny(text, ["affluent", "aise", "confortable", "patrimoine", "chef d entreprise"])) {
     return "affluent";
   }
-  if (text.includes("working class") || text.includes("budget") || text.includes("cost aware") || text.includes("value conscious")) {
+  if (
+    includesAny(text, ["budget", "prix", "facture", "loyer", "economie", "epargner", "fuite", "reparation", "cout"]) ||
+    employmentClass === "out_of_work" ||
+    employmentClass === "working_class" ||
+    (employmentClass === "service_employee" && householdType === "family_household")
+  ) {
     return "cost_sensitive";
   }
-  if (text.includes("stable")) {
+  if (
+    includesAny(text, ["stable", "fonctionnaire", "administratif", "rigueur", "methodique"]) ||
+    employmentClass === "retired" ||
+    employmentClass === "executive_professional" ||
+    employmentClass === "intermediate_professional" ||
+    employmentClass === "self_employed"
+  ) {
     return "stable_middle";
   }
   return "mixed";
 }
 
-function inferHousingStatus(household: string, city: string) {
-  const text = `${household} ${city}`.toLowerCase();
-  if (text.includes("paris") || text.includes("arrondissement")) {
+function inferHousingStatus(household: string, city: string, narrative: string) {
+  const text = normalizedText(household, city, narrative);
+  if (includesAny(text, ["paris", "arrondissement", "orly", "argenteuil", "montreuil", "appartement", "immeuble"])) {
     return "urban_renter_profile";
   }
-  if (text.includes("family")) {
+  if (includesAny(text, ["famille", "avec enfant", "maison", "foyer", "potager", "jardin"])) {
     return "family_home_profile";
   }
   return "mixed_housing";
 }
 
 function inferMobilityProfile(city: string) {
-  const text = city.toLowerCase();
-  if (text.includes("paris") || text.includes("argenteuil") || text.includes("orly") || text.includes("montreuil")) {
+  const text = normalizedText(city);
+  if (includesAny(text, ["paris", "argenteuil", "orly", "montreuil"])) {
     return "transit_oriented";
+  }
+  if (includesAny(text, ["saint ", "saint-", "mons", "lille", "lyon", "grenoble"])) {
+    return "mixed_commute";
   }
   return "car_and_local_service";
 }
 
 function inferUrbanicity(city: string) {
-  const text = city.toLowerCase();
-  if (text.includes("paris") || text.includes("arrondissement")) {
+  const text = normalizedText(city);
+  if (includesAny(text, ["paris", "arrondissement"])) {
     return "major_urban";
   }
-  if (text.includes("saint-") || text.includes("mons") || text.includes("argenteuil") || text.includes("orly")) {
+  if (includesAny(text, ["saint-", "saint ", "mons", "argenteuil", "orly", "montreuil", "chambery", "clermont", "nantes"])) {
     return "secondary_urban";
   }
   return "small_town_rural";
 }
 
 function inferRegionFamily(region: string) {
-  const text = region.toLowerCase();
+  const text = normalizedText(region);
   if (["paris", "val-de-marne", "val-d'oise"].some((token) => text.includes(token))) {
     return "ile_de_france";
   }
@@ -179,12 +208,16 @@ function inferRegionFamily(region: string) {
   return "regional_france";
 }
 
-function inferPublicServiceDependency(economicPosture: string, age: number) {
-  const text = economicPosture.toLowerCase();
-  if (age >= 60) {
+function inferPublicServiceDependency(economicPosture: string, age: number, employmentClass: string, householdType: string, narrative: string) {
+  const text = normalizedText(economicPosture, narrative);
+  if (age >= 60 || employmentClass === "retired") {
     return "high";
   }
-  if (text.includes("working class") || text.includes("budget") || text.includes("sans activité")) {
+  if (
+    includesAny(text, ["administratif", "fonctionnaire", "papiers administratifs", "service", "demarches"]) ||
+    employmentClass === "out_of_work" ||
+    householdType === "family_household"
+  ) {
     return "medium_high";
   }
   return "medium";
@@ -194,42 +227,76 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function deriveAssignmentMetadata(persona: Omit<NormalizedPersona, "assignmentMetadata">): PersonaAssignmentMetadata {
+function inferTrustOrientationTags(persona: Omit<NormalizedPersona, "assignmentMetadata">, publicServiceDependency: string) {
+  const text = normalizedText(persona.profileNarrative, ...persona.traits, ...persona.concerns);
+  return unique([
+    includesAny(text, ["pragmat", "sens pratique", "terre a terre", "rigueur", "methodique"]) ? "pragmatic" : "open_to_argument",
+    includesAny(text, ["verifie", "critique", "mefiance", "anxiet", "controle", "etiquette de securite"]) ? "proof_seeking" : "",
+    publicServiceDependency === "high" || includesAny(text, ["fonctionnaire", "administratif", "papier", "demarche"]) ? "institution_reliant" : "",
+  ]);
+}
+
+function inferIssueSalienceTags(
+  persona: Omit<NormalizedPersona, "assignmentMetadata">,
+  householdType: string,
+  employmentClass: string,
+  mobilityProfile: string,
+  urbanicity: string,
+) {
+  const text = normalizedText(persona.profileNarrative, persona.occupation, persona.household, persona.city, persona.region);
+  return unique([
+    ...persona.concerns.map((concern) => slugify(concern).replace(/-/g, "_")),
+    employmentClass === "retired" ? "healthcare" : "",
+    employmentClass === "working_class" || employmentClass === "service_employee" || employmentClass === "out_of_work" ? "cost_of_living" : "",
+    employmentClass === "working_class" || employmentClass === "self_employed" ? "employment" : "",
+    householdType === "family_household" ? "family_life" : "",
+    mobilityProfile === "transit_oriented" || urbanicity !== "small_town_rural" ? "transport" : "",
+    includesAny(text, ["administratif", "fonctionnaire", "papiers administratifs", "service public"]) ? "public_services" : "",
+    includesAny(text, ["atelier", "chantier", "boulanger", "commerce", "potager"]) ? "local_economy" : "",
+    includesAny(text, ["immeuble", "appartement", "logement", "foyer"]) ? "housing" : "",
+    "public_policy",
+  ]);
+}
+
+export function deriveAssignmentMetadata(persona: Omit<NormalizedPersona, "assignmentMetadata">): PersonaAssignmentMetadata {
   const employmentClass = inferEmploymentClass(persona.occupation);
   const lifeStage = inferLifeStage(persona.age);
-  const incomePosture = inferIncomePosture(persona.economicPosture);
   const householdType = inferHouseholdType(persona.household);
+  const incomePosture = inferIncomePosture(persona.economicPosture, employmentClass, householdType, persona.profileNarrative);
   const mobilityProfile = inferMobilityProfile(persona.city);
   const urbanicity = inferUrbanicity(persona.city);
   const regionFamily = inferRegionFamily(persona.region);
-  const publicServiceDependency = inferPublicServiceDependency(persona.economicPosture, persona.age);
+  const publicServiceDependency = inferPublicServiceDependency(
+    persona.economicPosture,
+    persona.age,
+    employmentClass,
+    householdType,
+    persona.profileNarrative,
+  );
+  const housingStatus = inferHousingStatus(persona.household, persona.city, persona.profileNarrative);
 
   const policyExposureTags = unique([
     employmentClass,
     mobilityProfile,
     urbanicity,
-    householdType.includes("family") ? "family_budget_exposure" : "individual_budget_exposure",
+    householdType === "family_household" ? "family_budget_exposure" : householdType === "single_adult" ? "solo_household_exposure" : "shared_household_exposure",
+    housingStatus === "urban_renter_profile" ? "housing_cost_exposure" : "",
+    publicServiceDependency !== "medium" ? "public_service_interface" : "",
   ]);
   const economicVulnerabilityTags = unique([
-    incomePosture === "cost_sensitive" ? "high_cost_of_living_pressure" : "moderate_cost_pressure",
+    incomePosture === "cost_sensitive" ? "high_cost_of_living_pressure" : incomePosture === "stable_middle" ? "moderate_cost_pressure" : "low_cost_pressure",
     employmentClass === "out_of_work" ? "employment_insecurity" : "",
     lifeStage === "retirement_age" ? "fixed_income" : "",
   ]);
-  const trustOrientationTags = unique([
-    persona.traits.some((trait) => trait.toLowerCase().includes("pragmatic")) ? "pragmatic" : "open_to_argument",
-    publicServiceDependency === "high" ? "institution_reliant" : "proof_seeking",
-  ]);
-  const issueSalienceTags = unique([
-    ...persona.concerns.map((concern) => slugify(concern).replace(/-/g, "_")),
-    persona.profileNarrative.toLowerCase().includes("energy") ? "energy_policy" : "public_policy",
-  ]);
+  const trustOrientationTags = inferTrustOrientationTags(persona, publicServiceDependency);
+  const issueSalienceTags = inferIssueSalienceTags(persona, householdType, employmentClass, mobilityProfile, urbanicity);
 
   return personaAssignmentMetadataSchema.parse({
     life_stage: lifeStage,
     household_type: householdType,
     employment_class: employmentClass,
     income_posture: incomePosture,
-    housing_status: inferHousingStatus(persona.household, persona.city),
+    housing_status: housingStatus,
     mobility_profile: mobilityProfile,
     urbanicity,
     region_family: regionFamily,
@@ -241,7 +308,24 @@ function deriveAssignmentMetadata(persona: Omit<NormalizedPersona, "assignmentMe
   });
 }
 
-function normalizePersonaRow(row: Record<string, unknown>, sampleVersion: string, index: number) {
+export function refreshPersonaMetadata(persona: NormalizedPersona): NormalizedPersona {
+  const assignmentMetadata = deriveAssignmentMetadata({
+    ...persona,
+    housingStatus: persona.housingStatus,
+    mobilityProfile: persona.mobilityProfile,
+    urbanicity: persona.urbanicity,
+  });
+
+  return normalizedPersonaSchema.parse({
+    ...persona,
+    housingStatus: persona.housingStatus === "mixed_housing" ? assignmentMetadata.housing_status : persona.housingStatus,
+    mobilityProfile: persona.mobilityProfile === "mixed_mobility" ? assignmentMetadata.mobility_profile : persona.mobilityProfile,
+    urbanicity: persona.urbanicity === "mixed_urbanicity" ? assignmentMetadata.urbanicity : persona.urbanicity,
+    assignmentMetadata,
+  });
+}
+
+export function normalizePersonaRow(row: Record<string, unknown>, sampleVersion: string, index: number) {
   const profileNarrative = pickString(row, ["persona", "profile", "biography", "description", "narrative"], "French respondent profile");
   const traits = toStringArray(row.personality_traits ?? row.traits ?? row.personality);
   const concerns = toStringArray(row.concerns ?? row.key_concerns ?? row.priorities);
@@ -269,20 +353,36 @@ function normalizePersonaRow(row: Record<string, unknown>, sampleVersion: string
     profileNarrative,
   };
 
-  const assignmentMetadata = deriveAssignmentMetadata(basePersona);
-  return normalizedPersonaSchema.parse({
+  return refreshPersonaMetadata(
+    normalizedPersonaSchema.parse({
     ...basePersona,
-    housingStatus: basePersona.housingStatus === "mixed_housing" ? assignmentMetadata.housing_status : basePersona.housingStatus,
-    mobilityProfile: basePersona.mobilityProfile === "mixed_mobility" ? assignmentMetadata.mobility_profile : basePersona.mobilityProfile,
-    urbanicity: basePersona.urbanicity === "mixed_urbanicity" ? assignmentMetadata.urbanicity : basePersona.urbanicity,
-    assignmentMetadata,
-  });
+      assignmentMetadata: personaAssignmentMetadataSchema.parse({
+        life_stage: inferLifeStage(basePersona.age),
+        household_type: inferHouseholdType(basePersona.household),
+        employment_class: inferEmploymentClass(basePersona.occupation),
+        income_posture: "mixed",
+        housing_status: basePersona.housingStatus,
+        mobility_profile: basePersona.mobilityProfile,
+        urbanicity: basePersona.urbanicity,
+        region_family: inferRegionFamily(basePersona.region),
+        public_service_dependency: "medium",
+        policy_exposure_tags: ["public_policy"],
+        economic_vulnerability_tags: ["moderate_cost_pressure"],
+        trust_orientation_tags: ["open_to_argument"],
+        issue_salience_tags: ["public_policy"],
+      }),
+    }),
+  );
 }
 
 async function readCachedPersonas() {
   try {
     const contents = await readFile(getPersonaCachePath(), "utf8");
-    return personaCacheSchema.parse(JSON.parse(contents));
+    const cached = personaCacheSchema.parse(JSON.parse(contents));
+    return personaCacheSchema.parse({
+      ...cached,
+      personas: cached.personas.map((persona) => refreshPersonaMetadata(persona)),
+    });
   } catch {
     return null;
   }

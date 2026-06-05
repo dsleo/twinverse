@@ -68,8 +68,8 @@ vi.mock("./openaiStructured", () => ({
   })),
 }));
 
-import { mapPopulationToPanel } from "./populationMapping";
-import type { PersonaCache } from "../../lib/labSchemas";
+import { buildMetadataValueFrequencies, mapPopulationToPanel, scorePersona } from "./populationMapping";
+import type { PersonaCache, PopulationSegmentSpec } from "../../lib/labSchemas";
 
 function makePersona(index: number, overrides: Partial<PersonaCache["personas"][number]> = {}): PersonaCache["personas"][number] {
   const employmentClasses = ["working_class", "service_employee", "retired", "executive_professional", "self_employed"] as const;
@@ -113,7 +113,84 @@ function makePersona(index: number, overrides: Partial<PersonaCache["personas"][
   };
 }
 
+function makeSegment(overrides: Partial<PopulationSegmentSpec> = {}): PopulationSegmentSpec {
+  return {
+    id: "segment",
+    label: "Segment",
+    summary: "Segment summary",
+    concerns: ["cost of living"],
+    informationNeeds: ["monthly impact"],
+    inclusionTags: [{ family: "employment_class", values: ["retired"] }],
+    exclusionTags: [],
+    preferredDiversityHints: [],
+    rankingSignals: [],
+    rankingCriteria: ["fixed income"],
+    ...overrides,
+  };
+}
+
 describe("mapPopulationToPanel", () => {
+  it("does not let rankingCriteria alone increase score", () => {
+    const personas = [
+      makePersona(1, {
+        assignmentMetadata: {
+          ...makePersona(1).assignmentMetadata,
+          employment_class: "retired",
+        },
+        profileNarrative: "This profile mentions fixed income repeatedly.",
+      }),
+      makePersona(2, {
+        assignmentMetadata: {
+          ...makePersona(2).assignmentMetadata,
+          employment_class: "working_class",
+        },
+        profileNarrative: "This profile also mentions fixed income repeatedly.",
+      }),
+    ];
+    const frequencies = buildMetadataValueFrequencies(personas);
+    const segment = makeSegment();
+
+    const matched = scorePersona(personas[0], segment, "france_general", frequencies, personas.length);
+    const unmatched = scorePersona(personas[1], segment, "france_general", frequencies, personas.length);
+
+    expect(matched.eligible).toBe(true);
+    expect(unmatched.eligible).toBe(false);
+    expect(unmatched.reasons).toContain("no_inclusion_match");
+  });
+
+  it("applies exclusion precedence and keeps audience prior from outranking non-matches", () => {
+    const personas = [
+      makePersona(1, {
+        assignmentMetadata: {
+          ...makePersona(1).assignmentMetadata,
+          employment_class: "retired",
+          life_stage: "retirement_age",
+          income_posture: "affluent",
+        },
+      }),
+      makePersona(2, {
+        assignmentMetadata: {
+          ...makePersona(2).assignmentMetadata,
+          employment_class: "executive_professional",
+          life_stage: "retirement_age",
+          income_posture: "affluent",
+        },
+      }),
+    ];
+    const frequencies = buildMetadataValueFrequencies(personas);
+    const segment = makeSegment({
+      exclusionTags: [{ family: "income_posture", values: ["affluent"] }],
+    });
+
+    const excluded = scorePersona(personas[0], segment, "le_figaro_reader", frequencies, personas.length);
+    const nonMatch = scorePersona(personas[1], makeSegment(), "le_figaro_reader", frequencies, personas.length);
+
+    expect(excluded.eligible).toBe(false);
+    expect(excluded.reasons).toContain("excluded_by_segment");
+    expect(nonMatch.eligible).toBe(false);
+    expect(nonMatch.total).toBe(Number.NEGATIVE_INFINITY);
+  });
+
   it("produces five segments, a 20-person panel, and two evaluated personas per segment", async () => {
     const cache: PersonaCache = {
       dataset: "nvidia/Nemotron-Personas-France",
@@ -150,9 +227,19 @@ describe("mapPopulationToPanel", () => {
             assignmentMetadata: {
               ...makePersona(index).assignmentMetadata,
               life_stage: "retirement_age",
-              employment_class: "retired",
+              employment_class:
+                index % 5 === 0
+                  ? "retired"
+                  : index % 5 === 1
+                    ? "executive_professional"
+                    : index % 5 === 2
+                      ? "self_employed"
+                      : index % 5 === 3
+                        ? "working_class"
+                        : "service_employee",
               income_posture: "affluent",
               housing_status: "family_home_profile",
+              urbanicity: index % 2 === 0 ? "major_urban" : "secondary_urban",
               trust_orientation_tags: ["pragmatic", "proof_seeking", "institution_reliant"],
             },
           }),
@@ -181,5 +268,44 @@ describe("mapPopulationToPanel", () => {
     );
 
     expect(result.panel.every((persona) => persona.assignmentMetadata.life_stage !== "young_adult")).toBe(true);
+  });
+
+  it("keeps segment guarantees under overlap and selects distinct panel personas when possible", async () => {
+    const cache: PersonaCache = {
+      dataset: "nvidia/Nemotron-Personas-France",
+      fetchedAt: new Date().toISOString(),
+      sampleVersion: "2026-06-04",
+      sampleSize: 60,
+      personas: Array.from({ length: 60 }, (_, index) =>
+        makePersona(index, {
+          assignmentMetadata: {
+            ...makePersona(index).assignmentMetadata,
+            employment_class: index < 20 ? "retired" : index < 40 ? "service_employee" : "executive_professional",
+            household_type: index % 2 === 0 ? "family_household" : "single_adult",
+            urbanicity: index % 3 === 0 ? "major_urban" : "secondary_urban",
+            region_family: index % 4 === 0 ? "ile_de_france" : "regional_france",
+          },
+        }),
+      ),
+    };
+
+    const result = await mapPopulationToPanel(
+      {
+        rawInput: "Comment faut-il reformer les transports publics en France ?",
+        inputType: "question",
+      },
+      cache,
+      "france_general",
+    );
+
+    expect(new Set(result.assignment.panelPersonaIds).size).toBe(20);
+    expect(result.assignment.segments.every((segment) => segment.memberPersonaIds.length >= 2)).toBe(true);
+    expect(
+      result.assignment.segments.every(
+        (segment) =>
+          segment.evaluatedPersonaIds.every((personaId) => segment.memberPersonaIds.includes(personaId)) &&
+          segment.representativePersonaIds.every((personaId) => segment.memberPersonaIds.includes(personaId)),
+      ),
+    ).toBe(true);
   });
 });

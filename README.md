@@ -143,6 +143,57 @@ The population layer provides the system with a structured synthetic audience ra
 
 Scientifically, this layer encodes heterogeneity. It is the mechanism that lets the system ask not "what does the public think?" but "which publics are relevant here, and why?"
 
+#### Persona mapping
+
+Tweenverse does not simulate directly from raw persona prose. It first converts a sampled Hugging Face persona pool into a prompt-specific synthetic audience panel through a deterministic, metadata-first mapping stage:
+
+```text
+Hugging Face persona rows
+          |
+          v
++---------------------------+
+| normalize base personas   |
+| age, city, job, household |
++---------------------------+
+          |
+          v
++---------------------------+
+| derive assignment metadata|
+| life stage, class,        |
+| urbanicity, vulnerability,|
+| trust, salience           |
++---------------------------+
+          |
+          v
++---------------------------+
+| LLM defines 5 segments    |
+| using only that taxonomy  |
++---------------------------+
+          |
+          v
++---------------------------+
+| deterministic scoring     |
+| eligibility -> affinity   |
++---------------------------+
+          |
+          v
++---------------------------+
+| diversified 20-person     |
+| panel selection           |
++---------------------------+
+          |
+          v
+context packs -> reactions -> divergence report
+```
+
+Methodologically, the step has four parts:
+- normalize each dataset row into a common persona schema
+- derive reusable assignment metadata from structured fields plus deterministic cues in the French profile narrative
+- induce five prompt-relevant audience segments, constrained to the observed metadata taxonomy
+- score personas against segments using structured tag matches only, then build a compact panel that preserves segment coverage while reducing near-duplicate profiles
+
+This mapping stage is the system's population prior. It fixes who is analytically relevant before retrieval and reaction simulation, so downstream outputs reflect situated social positions rather than an undifferentiated "average citizen."
+
 ### 2. Evidence layer
 
 The evidence layer retrieves public signals from multiple sources with different epistemic roles:

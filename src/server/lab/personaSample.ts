@@ -1,8 +1,5 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { getPersonaCachePath } from "./persistence";
 import {
   normalizedPersonaSchema,
   personaAssignmentMetadataSchema,
@@ -11,6 +8,7 @@ import {
   type PersonaAssignmentMetadata,
   type PersonaCache,
 } from "../../lib/labSchemas";
+import { getLabStorage, PERSONA_CACHE_KEY } from "./storage";
 
 const DATASET_NAME = "nvidia/Nemotron-Personas-France";
 const DEFAULT_SAMPLE_SIZE = 100;
@@ -280,17 +278,11 @@ function normalizePersonaRow(row: Record<string, unknown>, sampleVersion: string
 }
 
 async function readCachedPersonas() {
-  try {
-    const contents = await readFile(getPersonaCachePath(), "utf8");
-    return personaCacheSchema.parse(JSON.parse(contents));
-  } catch {
-    return null;
-  }
+  return getLabStorage().readPersonaCache(PERSONA_CACHE_KEY);
 }
 
 async function writeCache(cache: PersonaCache) {
-  await mkdir(path.dirname(getPersonaCachePath()), { recursive: true });
-  await writeFile(getPersonaCachePath(), JSON.stringify(cache, null, 2), "utf8");
+  await getLabStorage().writePersonaCache(PERSONA_CACHE_KEY, cache, CACHE_TTL_MS);
 }
 
 async function fetchDatasetRows(length: number) {

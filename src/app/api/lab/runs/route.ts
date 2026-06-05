@@ -3,6 +3,7 @@ import { inputTypeSchema, runModeSchema } from "../../../../lib/labSchemas";
 import { resolveLeFigaroDailyQuestion } from "../../../../server/lab/dailyQuestion";
 import { createLabRun, executeLabRun } from "../../../../server/lab/pipeline";
 import { listRuns } from "../../../../server/lab/persistence";
+import { enqueueLabRun, isQstashConfigured, isWorkerQueueRequired } from "../../../../server/lab/qstash";
 
 export const runtime = "nodejs";
 
@@ -56,7 +57,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Today’s Le Figaro question is unavailable." }, { status: 503 });
   }
 
-  void executeLabRun(run.id);
+  if (isQstashConfigured()) {
+    await enqueueLabRun(request, run.id);
+  } else if (isWorkerQueueRequired()) {
+    return NextResponse.json(
+      { error: "Worker queue is not configured. Set QSTASH_TOKEN and signing keys for production runs." },
+      { status: 500 },
+    );
+  } else {
+    void executeLabRun(run.id);
+  }
 
   return NextResponse.json({ runId: run.id }, { status: 202 });
 }

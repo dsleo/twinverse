@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { extractLeFigaroQuestionFromDossier, extractLeFigaroQuestionPage, resolveLeFigaroDailyQuestion } from "./dailyQuestion";
+import { resetLabStorageForTests } from "./storage";
 
 const originalFetch = globalThis.fetch;
 const dataDir = path.join(process.cwd(), ".tmp-tests", "daily-question");
@@ -12,6 +13,7 @@ afterEach(async () => {
   process.env.LAB_DATA_ROOT = dataDir;
   await rm(dataDir, { recursive: true, force: true });
   delete process.env.LAB_DATA_ROOT;
+  resetLabStorageForTests();
 });
 
 function htmlResponse(html: string, status = 200) {

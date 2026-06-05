@@ -1,18 +1,10 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { dailyQuestionPreviewSchema, type DailyQuestionPreview, type PromptSource } from "../../lib/labSchemas";
-import { getDailyQuestionCachePath } from "./persistence";
+import { getLabStorage, type CachedDailyQuestion } from "./storage";
 
 const LE_FIGARO_SOURCE = "le_figaro";
 const LE_FIGARO_DOSSIER_URL = "https://www.lefigaro.fr/dossier/les-questions-du-jour-du-figaro";
-
-type CachedDailyQuestion = {
-  source: typeof LE_FIGARO_SOURCE;
-  question: string;
-  promptSource: Omit<PromptSource, "cacheStatus">;
-};
 
 function decodeHtmlEntities(value: string) {
   return value
@@ -159,18 +151,11 @@ function parisDateKey(now = new Date()) {
 }
 
 async function readCachedQuestion(questionDate: string) {
-  try {
-    const contents = await readFile(getDailyQuestionCachePath(LE_FIGARO_SOURCE, questionDate), "utf8");
-    return JSON.parse(contents) as CachedDailyQuestion;
-  } catch {
-    return null;
-  }
+  return getLabStorage().readDailyQuestion(LE_FIGARO_SOURCE, questionDate);
 }
 
 async function writeCachedQuestion(questionDate: string, payload: CachedDailyQuestion) {
-  const cachePath = getDailyQuestionCachePath(LE_FIGARO_SOURCE, questionDate);
-  await mkdir(path.dirname(cachePath), { recursive: true });
-  await writeFile(cachePath, JSON.stringify(payload, null, 2), "utf8");
+  await getLabStorage().writeDailyQuestion(LE_FIGARO_SOURCE, questionDate, payload);
 }
 
 async function fetchLeFigaroHtml() {

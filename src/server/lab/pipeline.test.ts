@@ -158,6 +158,7 @@ vi.mock("./aggregation", () => ({
 
 import { createLabRun, executeLabRun } from "./pipeline";
 import { readRun } from "./persistence";
+import { resetLabStorageForTests } from "./storage";
 
 const dataDir = path.join(process.cwd(), ".tmp-tests", "pipeline");
 
@@ -166,6 +167,7 @@ afterEach(async () => {
   process.env.LAB_DATA_ROOT = dataDir;
   await rm(dataDir, { recursive: true, force: true });
   delete process.env.LAB_DATA_ROOT;
+  resetLabStorageForTests();
 });
 
 describe("executeLabRun", () => {

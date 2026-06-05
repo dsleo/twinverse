@@ -9,7 +9,7 @@ export type RunMode = z.infer<typeof runModeSchema>;
 export const audiencePresetSchema = z.enum(["france_general", "le_figaro_reader"]);
 export type AudiencePreset = z.infer<typeof audiencePresetSchema>;
 
-export const providerSchema = z.enum(["wikipedia", "rss", "gdelt", "reddit", "google_trends"]);
+export const providerSchema = z.enum(["wikipedia", "rss", "reddit", "vie_publique", "data_gouv"]);
 export type Provider = z.infer<typeof providerSchema>;
 
 export const stageIdSchema = z.enum([

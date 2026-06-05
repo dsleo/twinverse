@@ -16,6 +16,7 @@ describe("LabPageClient", () => {
     expect(screen.queryByText("Choose the prompt source")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Paste a question/i)).toBeInTheDocument();
     expect(screen.queryByText(/Le Figaro du jour/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Segments and panel selection reflect a general France-wide audience mix\./i)).not.toBeInTheDocument();
   });
 
   it("renders the Le Figaro mode as a read-only daily question flow", async () => {
@@ -76,7 +77,7 @@ describe("LabPageClient", () => {
     render(<LabPageClient fixedMode="le_figaro_daily" />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Run pipeline/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /Run/i })).toBeDisabled();
     });
   });
 });

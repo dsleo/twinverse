@@ -124,7 +124,7 @@ The current role structure is:
 - `ContextPackBuilderAgent`
   Converts retrieved evidence plus segment characteristics into a compact informational framing for each segment.
 - `ReactionAgent`
-  Simulates the response of an individual persona under a specific segment framing.
+  Simulates the responses of the evaluated personas inside a specific segment framing.
 - `AggregatorAgent`
   Compresses multiple persona reactions into a higher-level account of consensus, uncertainty, and divergence.
 
@@ -148,7 +148,8 @@ Scientifically, this layer encodes heterogeneity. It is the mechanism that lets 
 The evidence layer retrieves public signals from multiple sources with different epistemic roles:
 - encyclopedic background for stable context
 - recent news framing for salience and media presentation
-- event-oriented signals for recent developments
+- official policy publications for institutional framing
+- official open-data publications for factual public datasets
 - public discourse signals for informal debate and attention
 
 This layer approximates the informational environment surrounding the prompt. It does not claim that every persona sees the same evidence, only that the system should not simulate reactions in an evidentiary vacuum.
@@ -236,6 +237,16 @@ The retrieval layer is also designed to degrade gracefully:
 - failed providers emit fallback artifacts instead of breaking the full run
 
 This preserves continuity of the experiment while making uncertainty and source failure visible.
+
+## Pipeline Performance Notes
+
+The current orchestration keeps the slowest work off the critical path where possible:
+- retrieval starts from the raw prompt immediately and runs in parallel with persona-cache loading and population mapping
+- context-pack generation runs in parallel across the five derived segments
+- persona reactions are batched per segment so the system makes five reaction calls rather than ten individual persona calls
+- run state is kept in memory during execution and persisted at stage checkpoints rather than rereading the full run record between stages
+
+Today, retrieval depends only on the raw prompt, not on the derived segments. A plausible later extension is segment-aware retrieval, where the system would expand or refine provider queries using each segment's concerns and information needs. That may improve relevance, but it would also increase latency, provider fan-out, and orchestration complexity, so it is intentionally deferred.
 
 ## How To Run
 

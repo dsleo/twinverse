@@ -49,14 +49,14 @@ function buildSearchPhrase(input: string) {
   return keywords.length > 0 ? keywords.join(" ") : input;
 }
 
-function buildQueries(input: LabInput): QueryPlan {
+export function buildQueries(input: LabInput): QueryPlan {
   const searchPhrase = buildSearchPhrase(input.rawInput);
   return [
     { provider: "wikipedia", query: input.rawInput, freshness: "background" },
     { provider: "rss", query: searchPhrase, freshness: "week" },
-    { provider: "gdelt", query: input.rawInput, freshness: "month" },
     { provider: "reddit", query: searchPhrase, freshness: "month" },
-    { provider: "google_trends", query: searchPhrase, freshness: "month" },
+    { provider: "vie_publique", query: searchPhrase, freshness: "month" },
+    { provider: "data_gouv", query: searchPhrase, freshness: "month" },
   ];
 }
 
@@ -70,22 +70,19 @@ function classifyProviderFailure(provider: Provider, status: number): ProviderOu
   if (status >= 500) {
     return "upstream_failure";
   }
-  if (provider === "google_trends" && status === 404) {
-    return "upstream_failure";
-  }
   return "parse_failure";
 }
 
 function providerLabel(provider: Provider) {
   switch (provider) {
-    case "gdelt":
-      return "GDELT";
-    case "google_trends":
-      return "Google Trends";
+    case "data_gouv":
+      return "data.gouv.fr";
     case "rss":
       return "Google News RSS";
     case "reddit":
       return "Reddit";
+    case "vie_publique":
+      return "Vie publique";
     case "wikipedia":
       return "Wikipedia";
   }
@@ -93,14 +90,14 @@ function providerLabel(provider: Provider) {
 
 function fallbackTitle(provider: Provider) {
   switch (provider) {
-    case "gdelt":
-      return "Recent event context";
-    case "google_trends":
-      return "Public attention signal";
+    case "data_gouv":
+      return "Official dataset context";
     case "reddit":
       return "Public discourse signal";
     case "rss":
       return "Recent media framing";
+    case "vie_publique":
+      return "Official policy context";
     case "wikipedia":
       return "Background reference";
   }
@@ -140,6 +137,48 @@ function stripMarkup(value: string) {
 
 function splitItems(xml: string) {
   return xml.match(/<item>[\s\S]*?<\/item>/gi) ?? [];
+}
+
+function publishedTime(value?: string) {
+  const timestamp = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function recencyScore(publishedAt?: string) {
+  const timestamp = publishedTime(publishedAt);
+  if (!timestamp) {
+    return 0;
+  }
+
+  const ageDays = (Date.now() - timestamp) / (1000 * 60 * 60 * 24);
+  if (ageDays <= 3) {
+    return 0.08;
+  }
+  if (ageDays <= 14) {
+    return 0.05;
+  }
+  if (ageDays <= 45) {
+    return 0.02;
+  }
+  return 0;
+}
+
+function overlapScore(query: string, text: string) {
+  const queryTokens = new Set(normalizeText(query).split(" ").filter(Boolean));
+  const textTokens = new Set(normalizeText(text).split(" ").filter(Boolean));
+  let overlap = 0;
+
+  for (const token of queryTokens) {
+    if (textTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  return overlap / Math.max(queryTokens.size, 1);
+}
+
+function officialScore(query: string, text: string, publishedAt: string | undefined, boost: number) {
+  return clamp(boost + overlapScore(query, text) * 0.42 + recencyScore(publishedAt), 0.35, 0.96);
 }
 
 async function fetchJson(url: string, provider: Provider) {
@@ -251,34 +290,6 @@ async function rssSources(query: string) {
   });
 }
 
-async function gdeltSources(query: string) {
-  const url = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
-  url.searchParams.set("query", query);
-  url.searchParams.set("mode", "artlist");
-  url.searchParams.set("format", "json");
-  url.searchParams.set("maxrecords", "5");
-  url.searchParams.set("sort", "datedesc");
-  url.searchParams.set("timespan", "30d");
-
-  const data = (await fetchJson(url.toString(), "gdelt")) as {
-    articles?: Array<{ title?: string; url?: string; seendate?: string; domain?: string; snippet?: string }>;
-  };
-
-  return (data.articles ?? []).slice(0, 5).map((article, index) => ({
-    id: `gdelt-${slugify(article.url ?? article.title ?? `${query}-${index}`)}`,
-    provider: "gdelt",
-    provenance: "live",
-    title: stripMarkup(article.title ?? query),
-    snippet: stripMarkup(article.snippet ?? "Recent French event coverage."),
-    url: article.url,
-    publishedAt: article.seendate,
-    sourceName: article.domain ?? "GDELT",
-    query,
-    relevanceScore: clamp(0.95 - index * 0.1, 0.45, 0.95),
-    tags: ["news", "events"],
-  })) satisfies RetrievedSource[];
-}
-
 async function redditSources(query: string) {
   const url = new URL("https://www.reddit.com/search.json");
   url.searchParams.set("q", query);
@@ -313,57 +324,80 @@ async function redditSources(query: string) {
   });
 }
 
-function scoreOverlap(query: string, text: string) {
-  const queryTokens = new Set(normalizeText(query).split(" "));
-  const textTokens = new Set(normalizeText(text).split(" "));
-  let overlap = 0;
-  for (const token of queryTokens) {
-    if (textTokens.has(token)) {
-      overlap += 1;
-    }
-  }
-  return overlap / Math.max(queryTokens.size, 1);
+async function viePubliqueSources(query: string) {
+  const xml = await fetchText(
+    "https://www.vie-publique.fr/actualites-feeds.xml",
+    "vie_publique",
+    "application/rss+xml,application/xml,text/xml,text/plain,*/*",
+  );
+
+  return splitItems(xml)
+    .map((item, index) => {
+      const title = stripMarkup(xmlValue(item, "title") ?? "Official policy context");
+      const snippet = stripMarkup(xmlValue(item, "description") ?? "Recent official public-policy publication.");
+      const url = xmlValue(item, "link");
+      const publishedAt = xmlValue(item, "pubDate");
+      const relevanceScore = officialScore(query, `${title} ${snippet}`, publishedAt, 0.52) - index * 0.03;
+
+      return {
+        id: `vie-publique-${slugify(url ?? title)}`,
+        provider: "vie_publique",
+        provenance: "live",
+        title,
+        snippet,
+        url,
+        publishedAt,
+        sourceName: "Vie publique",
+        query,
+        relevanceScore: clamp(relevanceScore, 0.35, 0.94),
+        tags: ["official", "policy", "france"],
+      } satisfies RetrievedSource;
+    })
+    .filter((source) => overlapScore(query, `${source.title} ${source.snippet}`) >= 0.2)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore || publishedTime(b.publishedAt) - publishedTime(a.publishedAt))
+    .slice(0, 3);
 }
 
-async function googleTrendsSources(query: string) {
-  const url = new URL("https://trends.google.com/trends/api/dailytrends");
-  url.searchParams.set("hl", "fr");
-  url.searchParams.set("geo", "FR");
-  url.searchParams.set("ns", "15");
+async function dataGouvSources(query: string) {
+  const url = new URL("https://www.data.gouv.fr/api/1/datasets/");
+  url.searchParams.set("q", query);
+  url.searchParams.set("page_size", "6");
 
-  const body = await fetchText(url.toString(), "google_trends", "application/json,text/plain,*/*");
-  const data = JSON.parse(body.replace(/^\)\]\}',?\n/, "")) as {
-    default?: { trendingSearchesDays?: Array<{ trendingSearches?: Array<{ title?: { query?: string }; formattedTraffic?: string; articles?: Array<{ title?: string }> }> }> };
+  const data = (await fetchJson(url.toString(), "data_gouv")) as {
+    data?: Array<{
+      title?: string;
+      page?: string;
+      description?: string;
+      last_update?: string;
+      organization?: { name?: string };
+      tags?: string[];
+    }>;
   };
-  const trends = data.default?.trendingSearchesDays?.flatMap((day) => day.trendingSearches ?? []) ?? [];
-  const ranked = trends
-    .map((trend, index) => ({
-      trend,
-      score: scoreOverlap(query, `${trend.title?.query ?? ""} ${trend.articles?.map((article) => article.title ?? "").join(" ")}`),
-      index,
-    }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, 2);
 
-  return ranked.flatMap(({ trend, score }, index) => {
-    const title = trend.title?.query;
-    if (!title || score <= 0) {
-      return [];
-    }
-    return [
-      {
-        id: `google-trends-${slugify(title)}`,
-        provider: "google_trends",
+  return (data.data ?? [])
+    .map((dataset, index) => {
+      const title = stripMarkup(dataset.title ?? "Official dataset context");
+      const snippet = stripMarkup(dataset.description ?? "Relevant open dataset published on data.gouv.fr.");
+      const publishedAt = dataset.last_update;
+      const relevanceScore = officialScore(query, `${title} ${snippet} ${(dataset.tags ?? []).join(" ")}`, publishedAt, 0.48) - index * 0.03;
+
+      return {
+        id: `data-gouv-${slugify(dataset.page ?? title)}`,
+        provider: "data_gouv",
         provenance: "live",
-        title: stripMarkup(title),
-        snippet: stripMarkup(`Trending in France${trend.formattedTraffic ? ` · ${trend.formattedTraffic}` : ""}. ${trend.articles?.[0]?.title ?? "Current public attention signal."}`),
-        sourceName: "Google Trends",
+        title,
+        snippet,
+        url: dataset.page,
+        publishedAt,
+        sourceName: dataset.organization?.name ?? "data.gouv.fr",
         query,
-        relevanceScore: clamp(score - index * 0.05, 0.35, 0.78),
-        tags: ["attention", "france"],
-      } satisfies RetrievedSource,
-    ];
-  });
+        relevanceScore: clamp(relevanceScore, 0.35, 0.93),
+        tags: ["official", "data", "france", ...(dataset.tags ?? []).slice(0, 3)],
+      } satisfies RetrievedSource;
+    })
+    .filter((source) => overlapScore(query, `${source.title} ${source.snippet} ${source.tags.join(" ")}`) >= 0.16)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore || publishedTime(b.publishedAt) - publishedTime(a.publishedAt))
+    .slice(0, 3);
 }
 
 async function runProvider(provider: Provider, query: string): Promise<ProviderResult> {
@@ -373,26 +407,30 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
         ? await wikipediaSources(query)
         : provider === "rss"
           ? await rssSources(query)
-          : provider === "gdelt"
-            ? await gdeltSources(query)
-            : provider === "reddit"
-              ? await redditSources(query)
-              : await googleTrendsSources(query);
+          : provider === "reddit"
+            ? await redditSources(query)
+            : provider === "vie_publique"
+              ? await viePubliqueSources(query)
+              : await dataGouvSources(query);
 
     if (sources.length === 0) {
+      const noResultsMessage =
+        provider === "vie_publique"
+          ? "Vie publique returned no recent official policy result that clearly matched this prompt."
+          : provider === "data_gouv"
+            ? "data.gouv.fr returned no relevant official dataset result for this prompt."
+            : `${providerLabel(provider)} returned no relevant results for this prompt.`;
+
       return {
         outcome: {
           provider,
           status: "no_relevant_results",
           query,
           sourceCount: 0,
-          message:
-            provider === "google_trends"
-              ? "Google Trends returned no close trend overlap for this prompt in France."
-              : `${providerLabel(provider)} returned no relevant results for this prompt.`,
+          message: noResultsMessage,
           diagnostics: {},
         },
-        sources: [fallbackSource(provider, query, provider === "google_trends" ? "Google Trends returned no close trend overlap for this prompt in France." : `${providerLabel(provider)} returned no relevant results for this prompt.`)],
+        sources: [fallbackSource(provider, query, noResultsMessage)],
       };
     }
 

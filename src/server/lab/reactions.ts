@@ -1,5 +1,6 @@
 import "server-only";
 
+import { z } from "zod";
 import { reactionResultSchema, type AssignedSegment, type ContextPack, type LabInput, type NormalizedPersona, type RetrievedSource } from "../../lib/labSchemas";
 import { callStructuredModel } from "./openaiStructured";
 
@@ -9,17 +10,27 @@ const reactionOutputSchema = reactionResultSchema.omit({
   contextPackId: true,
 });
 
-export async function buildReaction(
+const batchedReactionOutputSchema = z.object({
+  reactions: z.array(
+    z.object({
+      personaId: z.string().min(1),
+      ...reactionOutputSchema.shape,
+    }),
+  ).min(1),
+});
+
+export async function buildReactionsForSegment(
   input: LabInput,
   segment: AssignedSegment,
-  persona: NormalizedPersona,
+  personas: NormalizedPersona[],
   contextPack: ContextPack,
   sources: RetrievedSource[],
 ) {
   const system = [
-    "You simulate one French persona's reaction to a public prompt.",
-    "Use only the supplied persona profile, segment framing, context pack, and sources.",
-    "Return a structured reaction only.",
+    "You simulate French personas' reactions to a public prompt.",
+    "Use only the supplied persona profiles, segment framing, context pack, and sources.",
+    "Return exactly one structured reaction per provided persona.",
+    "Each reaction must include the matching personaId from the input.",
   ].join(" ");
 
   const user = JSON.stringify(
@@ -31,7 +42,8 @@ export async function buildReaction(
         concerns: segment.concerns,
         informationNeeds: segment.informationNeeds,
       },
-      persona: {
+      personas: personas.map((persona) => ({
+        personaId: persona.id,
         name: persona.name,
         age: persona.age,
         city: persona.city,
@@ -42,7 +54,7 @@ export async function buildReaction(
         concerns: persona.concerns,
         traits: persona.traits,
         profileNarrative: persona.profileNarrative,
-      },
+      })),
       contextPack,
       sources: sources.map((source) => ({
         title: source.title,
@@ -55,20 +67,38 @@ export async function buildReaction(
   );
 
   const result = await callStructuredModel({
-    schema: reactionOutputSchema,
-    schemaName: `reaction_${segment.id}_${persona.id}`,
-    stageName: "ReactionAgent",
+    schema: batchedReactionOutputSchema,
+    schemaName: `reactions_${segment.id}`,
+    stageName: "ReactionAgentBatch",
     system,
     user,
   });
 
-  return {
-    reaction: reactionResultSchema.parse({
-      personaId: persona.id,
+  const personaIds = new Set(personas.map((persona) => persona.id));
+  const reactions = result.data.reactions.map((reaction) => {
+    const { personaId, ...reactionData } = reaction;
+    return reactionResultSchema.parse({
+      personaId,
       segmentId: segment.id,
       contextPackId: contextPack.id,
-      ...result.data,
-    }),
+      ...reactionData,
+    });
+  });
+
+  if (reactions.length !== personas.length) {
+    throw new Error(`Reaction batch for ${segment.id} returned ${reactions.length} reactions for ${personas.length} personas.`);
+  }
+
+  if (new Set(reactions.map((reaction) => reaction.personaId)).size !== reactions.length) {
+    throw new Error(`Reaction batch for ${segment.id} returned duplicate persona ids.`);
+  }
+
+  if (reactions.some((reaction) => !personaIds.has(reaction.personaId))) {
+    throw new Error(`Reaction batch for ${segment.id} returned an unknown persona id.`);
+  }
+
+  return {
+    reactions,
     diagnostics: result.diagnostics,
   };
 }

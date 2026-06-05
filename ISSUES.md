@@ -210,3 +210,19 @@ If this feature needs to be dependable beyond demo quality:
 1. move retrieval off the browser
 2. downgrade Reddit and Google Trends from core assumptions
 3. treat GDELT as cache-backed and rate-limited, not directly real-time
+
+## Lab UI Known Issue
+
+### Stop button does not stop the pipeline
+
+Current status:
+- the lab CTA changes from `Run` to `Stop` while a run is active
+- there is no backend cancellation endpoint or worker-interrupt path behind that label yet
+
+Impact:
+- users can infer that an in-flight run can be aborted, but clicking `Stop` does not actually terminate pipeline execution
+
+Recommended fix:
+1. add an explicit cancellation API for active runs
+2. propagate cancellation checks through the pipeline and background execution path
+3. keep the `Stop` label only once abort is wired end-to-end, or relabel it until then

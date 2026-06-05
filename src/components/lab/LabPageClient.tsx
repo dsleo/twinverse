@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
-import { audiencePresetDescriptions, runModeLabels } from "../../lib/labAudience";
+import { runModeLabels } from "../../lib/labAudience";
 import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
 
 type JumpCard = {
@@ -316,24 +316,22 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             />
           )}
 
-          {mode === "manual" ? (
-            <p className="lab-mode-note">{audiencePresetDescriptions.france_general}</p>
-          ) : null}
-
           <div className="lab-command-row">
             <button type="submit" className="accent-button" disabled={submitDisabled}>
-              {run?.status === "running" ? "Running" : "Run pipeline"}
+              {run?.status === "running" ? "Stop" : "Run"}
             </button>
             <div className="lab-status" aria-live="polite">
               {run ? (
                 <>
-                  <span
-                    className={`status-pill ${
-                      run.status === "failed" ? "" : run.status === "completed" ? "status-complete" : "status-running"
-                    }`}
-                  >
-                    {run.status}
-                  </span>
+                  {run.status === "running" ? null : (
+                    <span
+                      className={`status-pill ${
+                        run.status === "failed" ? "" : run.status === "completed" ? "status-complete" : "status-running"
+                      }`}
+                    >
+                      {run.status}
+                    </span>
+                  )}
                   {currentStage?.summary ? <p>{currentStage.summary}</p> : null}
                 </>
               ) : null}

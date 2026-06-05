@@ -2,12 +2,12 @@ import "server-only";
 
 import { buildAggregation } from "./aggregation";
 import { buildContextPack } from "./contextPacks";
-import { completeStage, createRunRecord, failStage, readRun, startStage, updateRun, writeRun } from "./persistence";
+import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
-import { buildReaction } from "./reactions";
+import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
-import { type AudiencePreset, labInputSchema, type LabInput, type PromptSource, type RunMode } from "../../lib/labSchemas";
+import { type AudiencePreset, labInputSchema, type LabInput, type PersistedLabRun, type PromptSource, type RunMode, type StageId } from "../../lib/labSchemas";
 
 export async function createLabRun({
   input,
@@ -33,111 +33,200 @@ export async function createLabRun({
 }
 
 export async function executeLabRun(runId: string) {
-  try {
-    const initialRun = await readRun(runId);
-    const cache = await loadPersonaSample();
+  let currentRun: PersistedLabRun | null = null;
 
-    await startStage(runId, "population_mapping", "Assigning the live persona sample to question-specific segments.");
-    const mapped = await mapPopulationToPanel(initialRun.input, cache, initialRun.audiencePreset);
-    await updateRun(runId, (run) => ({
-      ...run,
+  const persistRun = async () => {
+    if (!currentRun) {
+      throw new Error("Run state is not initialized.");
+    }
+    await writeRun(currentRun);
+  };
+
+  const setStageStatus = (stageId: StageId, status: "running" | "completed" | "failed", options?: {
+    summary?: string;
+    error?: string;
+    diagnostics?: Record<string, string>;
+  }) => {
+    if (!currentRun) {
+      throw new Error("Run state is not initialized.");
+    }
+
+    const now = new Date().toISOString();
+    currentRun = {
+      ...currentRun,
+      status: status === "running" ? "running" : status === "failed" ? "failed" : currentRun.status,
+      error: status === "failed" ? options?.error : undefined,
+      steps: currentRun.steps.map((step) =>
+        step.id === stageId
+          ? {
+              ...step,
+              status,
+              startedAt: status === "running" ? now : step.startedAt,
+              completedAt: status === "completed" || status === "failed" ? now : undefined,
+              error: status === "failed" ? options?.error : undefined,
+              summary: options?.summary ?? step.summary,
+              diagnostics: options?.diagnostics ? { ...step.diagnostics, ...options.diagnostics } : step.diagnostics,
+            }
+          : step,
+      ),
+    };
+  };
+
+  try {
+    currentRun = await readRun(runId);
+    setStageStatus("retrieval", "running", {
+      summary: "Collecting live source signals from configured providers.",
+    });
+    await persistRun();
+
+    const retrievalPromise = retrieveSources(currentRun.input);
+
+    setStageStatus("population_mapping", "running", {
+      summary: "Assigning the live persona sample to question-specific segments.",
+    });
+    await persistRun();
+
+    const cache = await loadPersonaSample();
+    const mapped = await mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset);
+    currentRun = {
+      ...currentRun,
       panelSampleVersion: cache.sampleVersion,
       panel: mapped.panel,
       populationMap: mapped.assignment,
-      rawModelDiagnostics: [...run.rawModelDiagnostics, { stage: "population_mapping", ...mapped.diagnostics }],
-    }));
-    await completeStage(runId, "population_mapping", `Built 5 prompt-specific segments from ${cache.sampleSize} cached dataset personas.`, {
-      panelSize: String(mapped.panel.length),
-      sampleVersion: cache.sampleVersion,
-      audiencePreset: initialRun.audiencePreset,
+      rawModelDiagnostics: [...currentRun.rawModelDiagnostics, { stage: "population_mapping", ...mapped.diagnostics }],
+    };
+    setStageStatus("population_mapping", "completed", {
+      summary: `Built 5 prompt-specific segments from ${cache.sampleSize} cached dataset personas.`,
+      diagnostics: {
+        panelSize: String(mapped.panel.length),
+        sampleVersion: cache.sampleVersion,
+        audiencePreset: currentRun.audiencePreset,
+      },
     });
+    await persistRun();
 
-    await startStage(runId, "retrieval", "Collecting live source signals from configured providers.");
-    const retrieval = await retrieveSources(initialRun.input);
-    await updateRun(runId, (run) => ({ ...run, retrieval }));
-    await completeStage(
-      runId,
-      "retrieval",
-      `Collected ${retrieval.sources.length} source cards across ${retrieval.outcomes.length} providers.`,
-      Object.fromEntries(retrieval.outcomes.map((outcome) => [outcome.provider, outcome.status])),
-    );
+    const retrieval = await retrievalPromise;
+    currentRun = { ...currentRun, retrieval };
+    setStageStatus("retrieval", "completed", {
+      summary: `Collected ${retrieval.sources.length} source cards across ${retrieval.outcomes.length} providers.`,
+      diagnostics: Object.fromEntries(retrieval.outcomes.map((outcome) => [outcome.provider, outcome.status])),
+    });
+    await persistRun();
 
-    const runAfterRetrieval = await readRun(runId);
-    if (!runAfterRetrieval.populationMap) {
+    if (!currentRun.populationMap) {
       throw new Error("Population map missing after population stage.");
     }
-    if (!runAfterRetrieval.retrieval) {
+    if (!currentRun.retrieval) {
       throw new Error("Retrieval payload missing after retrieval stage.");
     }
 
-    await startStage(runId, "context_packs", "Writing one context pack per derived segment.");
+    const populationMap = currentRun.populationMap;
+    const retrievalState = currentRun.retrieval;
+    const panel = currentRun.panel;
+
+    setStageStatus("context_packs", "running", {
+      summary: "Writing one context pack per derived segment.",
+    });
+    await persistRun();
+
+    const preferredSources = retrievalState.sources.filter((source) => source.provenance === "live").slice(0, 4);
+    const sourcesForPrompts = preferredSources.length > 0 ? preferredSources : retrievalState.sources.slice(0, 4);
     const contextPackResults = await Promise.all(
-      runAfterRetrieval.populationMap.segments.map(async (segment) => {
-        const personas = runAfterRetrieval.panel.filter((persona) => segment.representativePersonaIds.includes(persona.id));
-        const liveSources = runAfterRetrieval.retrieval!.sources.filter((source) => source.provenance === "live").slice(0, 4);
-        return buildContextPack(runAfterRetrieval.input, segment, personas, liveSources.length > 0 ? liveSources : runAfterRetrieval.retrieval!.sources.slice(0, 4));
+      populationMap.segments.map(async (segment) => {
+        const personas = panel.filter((persona) => segment.representativePersonaIds.includes(persona.id));
+        return buildContextPack(currentRun!.input, segment, personas, sourcesForPrompts);
       }),
     );
-    await updateRun(runId, (run) => ({
-      ...run,
+    currentRun = {
+      ...currentRun,
       contextPacks: contextPackResults.map((result) => result.pack),
       rawModelDiagnostics: [
-        ...run.rawModelDiagnostics,
+        ...currentRun.rawModelDiagnostics,
         ...contextPackResults.map((result) => ({ stage: "context_packs" as const, ...result.diagnostics })),
       ],
-    }));
-    await completeStage(runId, "context_packs", `Built ${contextPackResults.length} structured context packs.`);
+    };
+    setStageStatus("context_packs", "completed", {
+      summary: `Built ${contextPackResults.length} structured context packs.`,
+    });
+    await persistRun();
 
-    const runAfterPacks = await readRun(runId);
-    await startStage(runId, "persona_reactions", "Evaluating two personas per segment with structured reactions.");
+    setStageStatus("persona_reactions", "running", {
+      summary: "Evaluating two personas per segment with structured reactions.",
+    });
+    await persistRun();
+
     const reactionResults = await Promise.all(
-      runAfterPacks.populationMap!.segments.flatMap((segment) =>
-        segment.evaluatedPersonaIds.map(async (personaId) => {
-          const persona = runAfterPacks.panel.find((entry) => entry.id === personaId);
-          const contextPack = runAfterPacks.contextPacks.find((pack) => pack.segmentId === segment.id);
-          if (!persona || !contextPack) {
-            throw new Error(`Reaction prerequisites missing for ${segment.id}/${personaId}.`);
+      populationMap.segments.map(async (segment) => {
+        const personas = segment.evaluatedPersonaIds.map((personaId) => {
+          const persona = panel.find((entry) => entry.id === personaId);
+          if (!persona) {
+            throw new Error(`Reaction persona missing for ${segment.id}/${personaId}.`);
           }
-          return buildReaction(runAfterPacks.input, segment, persona, contextPack, runAfterPacks.retrieval!.sources.slice(0, 4));
-        }),
-      ),
+          return persona;
+        });
+        const contextPack = currentRun!.contextPacks.find((pack) => pack.segmentId === segment.id);
+        if (!contextPack) {
+          throw new Error(`Reaction context pack missing for ${segment.id}.`);
+        }
+        return buildReactionsForSegment(currentRun!.input, segment, personas, contextPack, sourcesForPrompts);
+      }),
     );
-    await updateRun(runId, (run) => ({
-      ...run,
-      reactions: reactionResults.map((result) => result.reaction),
+    currentRun = {
+      ...currentRun,
+      reactions: reactionResults.flatMap((result) => result.reactions),
       rawModelDiagnostics: [
-        ...run.rawModelDiagnostics,
+        ...currentRun.rawModelDiagnostics,
         ...reactionResults.map((result) => ({ stage: "persona_reactions" as const, ...result.diagnostics })),
       ],
-    }));
-    await completeStage(runId, "persona_reactions", `Evaluated ${reactionResults.length} personas across 5 segments.`, {
-      evaluatedCount: String(reactionResults.length),
+    };
+    setStageStatus("persona_reactions", "completed", {
+      summary: `Evaluated ${currentRun.reactions.length} personas across 5 segments.`,
+      diagnostics: {
+        evaluatedCount: String(currentRun.reactions.length),
+      },
     });
+    await persistRun();
 
-    const runAfterReactions = await readRun(runId);
-    await startStage(runId, "divergence_report", "Aggregating the evaluated personas into a final split report.");
+    setStageStatus("divergence_report", "running", {
+      summary: "Aggregating the evaluated personas into a final split report.",
+    });
+    await persistRun();
+
     const aggregation = await buildAggregation(
-      runAfterReactions.input,
-      runAfterReactions.populationMap!.segments,
-      runAfterReactions.contextPacks,
-      runAfterReactions.reactions,
-      runAfterReactions.retrieval!.sources,
+      currentRun.input,
+      populationMap.segments,
+      currentRun.contextPacks,
+      currentRun.reactions,
+      retrievalState.sources,
     );
-    await updateRun(runId, (run) => ({
-      ...run,
+    currentRun = {
+      ...currentRun,
       status: "completed",
       aggregateReport: aggregation.report,
-      rawModelDiagnostics: [...run.rawModelDiagnostics, { stage: "divergence_report", ...aggregation.diagnostics }],
-    }));
-    await completeStage(runId, "divergence_report", "Final divergence report is ready.");
+      rawModelDiagnostics: [...currentRun.rawModelDiagnostics, { stage: "divergence_report", ...aggregation.diagnostics }],
+      error: undefined,
+    };
+    setStageStatus("divergence_report", "completed", {
+      summary: "Final divergence report is ready.",
+    });
+    await persistRun();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const run = await readRun(runId).catch(() => null);
-    const activeStep =
-      run?.steps.find((step) => step.status === "running")?.id ??
-      run?.steps.find((step) => step.status === "pending")?.id ??
-      "population_mapping";
 
-    await failStage(runId, activeStep, message);
+    if (!currentRun) {
+      currentRun = await readRun(runId).catch(() => null);
+    }
+
+    if (currentRun) {
+      const activeStep =
+        currentRun.steps.find((step) => step.status === "running")?.id ??
+        currentRun.steps.find((step) => step.status === "pending")?.id ??
+        "population_mapping";
+
+      setStageStatus(activeStep, "failed", { error: message });
+      await persistRun();
+    } else {
+      throw error;
+    }
   }
 }

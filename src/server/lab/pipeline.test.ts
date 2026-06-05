@@ -114,8 +114,8 @@ vi.mock("./contextPacks", () => ({
 }));
 
 vi.mock("./reactions", () => ({
-  buildReaction: vi.fn(async (_input, segment, persona, contextPack) => ({
-    reaction: {
+  buildReactionsForSegment: vi.fn(async (_input, segment, personas, contextPack) => ({
+    reactions: personas.map((persona: { id: string }) => ({
       personaId: persona.id,
       segmentId: segment.id,
       contextPackId: contextPack.id,
@@ -127,8 +127,8 @@ vi.mock("./reactions", () => ({
       quote: "Je veux voir les chiffres.",
       perceivedImpact: "Could affect bills.",
       misunderstanding: null,
-    },
-    diagnostics: { name: "ReactionAgent", model: "test", outputText: "{}" },
+    })),
+    diagnostics: { name: "ReactionAgentBatch", model: "test", outputText: "{}" },
   })),
 }));
 

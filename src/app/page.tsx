@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default function HomePage() {
+export default function Page() {
   return (
     <main className="page-shell">
       <section className="hero-copy">

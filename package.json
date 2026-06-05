@@ -18,7 +18,6 @@
     "playwright": "^1.60.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.2",
     "server-only": "^0.0.1",
     "zod": "^4.1.12",
     "zod-to-json-schema": "^3.25.2"

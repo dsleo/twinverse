@@ -172,7 +172,10 @@ export function MemoryPageClient() {
     <div className="memory-page page-shell">
       <section className="memory-hero hero-copy">
         <div className="eyebrow">Memory Lab</div>
-        <h1>Run the memory pipeline behind the forecast.</h1>
+        <h1>Ask. See how it lands.</h1>
+        <p className="hero-lede">
+          An agentic system combines live context with tailored synthetic personas to simulate audience reaction.
+        </p>
       </section>
 
       <section className="memory-card memory-command">

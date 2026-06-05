@@ -9,7 +9,7 @@ export default function Page() {
     <main className="page-shell">
       <div className="home-editorial">
         <section className="home-hero home-surface">
-          <h1>See how the public will read your message before you launch it.</h1>
+          <h1>Predict the future through popular wisdom.</h1>
           <div className="cta-row hero-actions home-cta-row">
             <Link href="/memory" className="accent-button home-cta">
               Open the Lab

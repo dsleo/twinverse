@@ -171,8 +171,8 @@ export function MemoryPageClient() {
   return (
     <div className="memory-page page-shell">
       <section className="memory-hero hero-copy">
-        <div className="eyebrow">Personalized Memory Injection</div>
-        <h1>Run a real five-step memory pipeline.</h1>
+        <div className="eyebrow">Memory Lab</div>
+        <h1>Run the memory pipeline behind the forecast.</h1>
       </section>
 
       <section className="memory-card memory-command">

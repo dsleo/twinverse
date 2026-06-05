@@ -1,21 +1,27 @@
 import Link from "next/link";
+import { SourceSignalStrip } from "../components/home/SourceSignalStrip";
+import { listSourceReferences } from "../lib/contentRepository";
 
 export default function Page() {
+  const sources = listSourceReferences();
+
   return (
     <main className="page-shell">
-      <section className="hero-copy">
-        <div className="eyebrow">Tweenverse</div>
-        <h1>Run memory injection on a real server pipeline.</h1>
-        <p>
-          The memory route now executes with server-side retrieval, structured model outputs, filesystem persistence, and
-          dynamic persona assignment.
-        </p>
-        <div className="cta-row">
-          <Link href="/memory" className="accent-button">
-            Open memory injection
-          </Link>
-        </div>
-      </section>
+      <div className="home-editorial">
+        <section className="home-hero home-surface">
+          <h1>See how the public will read your message before you launch it.</h1>
+          <div className="cta-row hero-actions home-cta-row">
+            <Link href="/memory" className="accent-button home-cta">
+              Open the Lab
+            </Link>
+            <Link href="/personas" className="ghost-button home-cta">
+              View Personas
+            </Link>
+          </div>
+        </section>
+
+        <SourceSignalStrip sources={sources} />
+      </div>
     </main>
   );
 }

@@ -74,6 +74,15 @@
   max-width: 10ch;
 }
 
+.home-hero h1 {
+  max-width: 15ch;
+}
+
+.personas-hero h1,
+.memory-hero h1 {
+  max-width: 16ch;
+}
+
 .hero-actions,
 .explorer-controls,
 .persona-meta,
@@ -179,6 +188,15 @@
 
   .evidence-grid {
     grid-template-columns: minmax(0, 1.1fr) minmax(19rem, 0.78fr);
+  }
+
+  .home-hero h1 {
+    max-width: 17ch;
+  }
+
+  .personas-hero h1,
+  .memory-hero h1 {
+    max-width: 18ch;
   }
 }
 

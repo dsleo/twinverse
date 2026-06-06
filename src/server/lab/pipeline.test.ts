@@ -158,6 +158,8 @@ vi.mock("./aggregation", () => ({
 
 import { createLabRun, executeLabRun } from "./pipeline";
 import { readRun } from "./persistence";
+import { mapPopulationToPanel } from "./populationMapping";
+import { retrieveSources } from "./retrieval";
 
 const dataDir = path.join(process.cwd(), ".tmp-tests", "pipeline");
 
@@ -201,5 +203,111 @@ describe("executeLabRun", () => {
     expect(persisted.contextPacks).toHaveLength(5);
     expect(persisted.reactions).toHaveLength(10);
     expect(persisted.aggregateReport?.perSegmentSummary).toHaveLength(5);
+  });
+
+  it("fails the retrieval stage without leaking an unhandled rejection when retrieval rejects early", async () => {
+    process.env.LAB_DATA_ROOT = dataDir;
+    vi.mocked(retrieveSources).mockImplementationOnce(async () => {
+      throw new Error("retrieval exploded");
+    });
+    vi.mocked(mapPopulationToPanel).mockImplementationOnce(
+      async () =>
+        await new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                assignment: {
+                  promptSummary: "Nuclear build-out in France",
+                  topicDimensions: ["energy"],
+                  panelSampleVersion: "2026-06-04",
+                  panelPersonaIds: Array.from({ length: 20 }, (_, index) => `persona-${index}`),
+                  segments: Array.from({ length: 5 }, (_, index) => ({
+                    id: `segment-${index}`,
+                    label: `Segment ${index + 1}`,
+                    summary: `Summary ${index + 1}`,
+                    concerns: ["cost"],
+                    informationNeeds: ["timeline"],
+                    inclusionTags: [{ family: "employment_class", values: ["working_class"] }],
+                    exclusionTags: [],
+                    preferredDiversityHints: [],
+                    rankingCriteria: ["cost"],
+                    rankingSignals: [],
+                    memberPersonaIds: [`persona-${index * 4}`, `persona-${index * 4 + 1}`, `persona-${index * 4 + 2}`, `persona-${index * 4 + 3}`],
+                    representativePersonaIds: [`persona-${index * 4}`, `persona-${index * 4 + 1}`, `persona-${index * 4 + 2}`],
+                    evaluatedPersonaIds: [`persona-${index * 4}`, `persona-${index * 4 + 1}`],
+                  })),
+                  globalRationale: "Synthetic rationale",
+                },
+                panel: Array.from({ length: 20 }, (_, index) => ({
+                  id: `persona-${index}`,
+                  sourceRowId: `row-${index}`,
+                  sourceDataset: "nvidia/Nemotron-Personas-France",
+                  sourceSampleVersion: "2026-06-04",
+                  name: `Persona ${index}`,
+                  age: 30 + index,
+                  city: "Paris",
+                  region: "France",
+                  occupation: "working_class",
+                  household: "family_household",
+                  economicPosture: "cost_sensitive",
+                  housingStatus: "mixed_housing",
+                  mobilityProfile: "transit_oriented",
+                  urbanicity: "major_urban",
+                  traits: ["pragmatic"],
+                  concerns: ["cost of living"],
+                  profileNarrative: "Profile",
+                  assignmentMetadata: {
+                    life_stage: "midcareer",
+                    household_type: "family_household",
+                    employment_class: "working_class",
+                    income_posture: "cost_sensitive",
+                    housing_status: "mixed_housing",
+                    mobility_profile: "transit_oriented",
+                    urbanicity: "major_urban",
+                    region_family: "ile_de_france",
+                    public_service_dependency: "medium",
+                    policy_exposure_tags: ["family_budget_exposure"],
+                    economic_vulnerability_tags: ["high_cost_of_living_pressure"],
+                    trust_orientation_tags: ["pragmatic"],
+                    issue_salience_tags: ["cost_of_living"],
+                  },
+                })),
+                diagnostics: { name: "PopulationMapperAgent", model: "test", outputText: "{}" },
+              }),
+            20,
+          );
+        }),
+    );
+
+    const run = await createLabRun({
+      input: {
+        rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+        inputType: "question",
+      },
+      mode: "manual",
+      audiencePreset: "france_general",
+      promptSnapshot: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+    });
+
+    const unhandled: unknown[] = [];
+    const handler = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", handler);
+
+    try {
+      await executeLabRun(run.id);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      process.off("unhandledRejection", handler);
+    }
+
+    const persisted = await readRun(run.id);
+    expect(unhandled).toEqual([]);
+    expect(persisted.status).toBe("failed");
+    expect(persisted.steps.find((step) => step.id === "retrieval")?.status).toBe("failed");
+    expect(persisted.steps.find((step) => step.id === "population_mapping")?.status).toBe("completed");
+    expect(persisted.steps.some((step) => step.status === "running")).toBe(false);
+    expect(persisted.error).toContain("retrieval exploded");
   });
 });

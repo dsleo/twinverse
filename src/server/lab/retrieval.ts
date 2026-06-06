@@ -11,7 +11,6 @@ type ProviderResult = {
 type QueryPlan = Array<{
   provider: Provider;
   query: string;
-  freshness: "today" | "week" | "month" | "background";
 }>;
 
 const searchStopwords = new Set(["faut", "pour", "avec", "dans", "contre", "entre", "question", "article", "france"]);
@@ -52,15 +51,23 @@ function buildSearchPhrase(input: string) {
 export function buildQueries(input: LabInput): QueryPlan {
   const searchPhrase = buildSearchPhrase(input.rawInput);
   return [
-    { provider: "wikipedia", query: input.rawInput, freshness: "background" },
-    { provider: "rss", query: searchPhrase, freshness: "week" },
-    { provider: "reddit", query: searchPhrase, freshness: "month" },
-    { provider: "vie_publique", query: searchPhrase, freshness: "month" },
-    { provider: "data_gouv", query: searchPhrase, freshness: "month" },
+    { provider: "wikipedia", query: input.rawInput },
+    { provider: "rss", query: searchPhrase },
+    { provider: "reddit", query: searchPhrase },
+    { provider: "vie_publique", query: searchPhrase },
+    { provider: "data_gouv", query: searchPhrase },
   ];
 }
 
-function classifyProviderFailure(provider: Provider, status: number): ProviderOutcomeStatus {
+class ProviderResponseParseError extends Error {
+  constructor(provider: Provider, responseType: "json" | "text", cause?: unknown) {
+    super(`${providerLabel(provider)} returned an unreadable ${responseType} payload.`);
+    this.name = "ProviderResponseParseError";
+    this.cause = cause;
+  }
+}
+
+function classifyProviderFailure(status: number): ProviderOutcomeStatus {
   if (status === 403) {
     return "blocked";
   }
@@ -70,7 +77,7 @@ function classifyProviderFailure(provider: Provider, status: number): ProviderOu
   if (status >= 500) {
     return "upstream_failure";
   }
-  return "parse_failure";
+  return "upstream_failure";
 }
 
 function providerLabel(provider: Provider) {
@@ -196,7 +203,11 @@ async function fetchJson(url: string, provider: Provider) {
     throw new Error(`${label} rejected the request (HTTP ${status}).`);
   }
 
-  return response.json();
+  try {
+    return await response.json();
+  } catch (error) {
+    throw new ProviderResponseParseError(provider, "json", error);
+  }
 }
 
 async function fetchText(url: string, provider: Provider, accept: string) {
@@ -214,7 +225,11 @@ async function fetchText(url: string, provider: Provider, accept: string) {
     throw new Error(`${label} rejected the request (HTTP ${status}).`);
   }
 
-  return response.text();
+  try {
+    return await response.text();
+  } catch (error) {
+    throw new ProviderResponseParseError(provider, "text", error);
+  }
 }
 
 async function wikipediaSources(query: string) {
@@ -449,7 +464,8 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
     const message = error instanceof Error ? error.message : String(error);
     const statusMatch = message.match(/HTTP (\d{3})/);
     const status = statusMatch ? Number(statusMatch[1]) : undefined;
-    const outcomeStatus = status ? classifyProviderFailure(provider, status) : "upstream_failure";
+    const outcomeStatus =
+      error instanceof ProviderResponseParseError ? "parse_failure" : status ? classifyProviderFailure(status) : "upstream_failure";
 
     return {
       outcome: {

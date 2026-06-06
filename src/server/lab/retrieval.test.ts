@@ -58,11 +58,52 @@ describe("retrieveSources", () => {
 
     expect(result.outcomes.find((outcome) => outcome.provider === "reddit")?.status).toBe("blocked");
     expect(result.outcomes.find((outcome) => outcome.provider === "vie_publique")?.status).toBe("upstream_failure");
-    expect(result.outcomes.find((outcome) => outcome.provider === "data_gouv")?.status).toBe("parse_failure");
+    expect(result.outcomes.find((outcome) => outcome.provider === "data_gouv")?.status).toBe("upstream_failure");
     expect(result.sources.some((source) => source.provider === "wikipedia" && source.provenance === "live")).toBe(true);
     expect(result.sources.some((source) => source.provider === "rss" && source.provenance === "live")).toBe(true);
     expect(result.sources.some((source) => source.provider === "vie_publique" && source.provenance === "fallback")).toBe(true);
     expect(result.sources.some((source) => source.provider === "data_gouv" && source.provenance === "fallback")).toBe(true);
+  });
+
+  it("classifies unreadable provider payloads as parse failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("wikipedia.org/w/api.php")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => {
+              throw new SyntaxError("bad json");
+            },
+          } as Response;
+        }
+        if (url.includes("news.google.com/rss/search")) {
+          return jsonResponse(
+            "<rss><channel><item><title>Nucléaire relancé - Reuters</title><link>https://example.com/reuters</link><description>Débat relancé en France.</description><pubDate>Wed, 04 Jun 2026 10:00:00 GMT</pubDate></item></channel></rss>",
+          );
+        }
+        if (url.includes("www.reddit.com/search.json")) {
+          return jsonResponse({ message: "blocked" }, 403);
+        }
+        if (url.includes("vie-publique.fr/actualites-feeds.xml")) {
+          return jsonResponse({ message: "busy" }, 503);
+        }
+        if (url.includes("data.gouv.fr/api/1/datasets/")) {
+          return jsonResponse({ data: [] });
+        }
+        return jsonResponse({}, 500);
+      }) as unknown as typeof fetch,
+    );
+
+    const result = await retrieveSources({
+      rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+      inputType: "question",
+    });
+
+    expect(result.outcomes.find((outcome) => outcome.provider === "wikipedia")?.status).toBe("parse_failure");
+    expect(result.sources.some((source) => source.provider === "wikipedia" && source.provenance === "fallback")).toBe(true);
   });
 
   it("returns live official sources when the new providers match", async () => {

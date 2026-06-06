@@ -1,10 +1,17 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { ZodError, z } from "zod";
 import { inputTypeSchema, runModeSchema } from "../../../../lib/labSchemas";
 import { resolveLeFigaroDailyQuestion } from "../../../../server/lab/dailyQuestion";
 import { createLabRun, executeLabRun } from "../../../../server/lab/pipeline";
 import { listRuns } from "../../../../server/lab/persistence";
 
 export const runtime = "nodejs";
+
+const createRunRequestSchema = z.object({
+  rawInput: z.string().optional(),
+  inputType: inputTypeSchema.optional(),
+  mode: runModeSchema.optional(),
+});
 
 export async function GET() {
   const runs = await listRuns();
@@ -21,42 +28,72 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { rawInput?: string; inputType?: string; mode?: string };
-  const mode = runModeSchema.catch("manual").parse(body.mode);
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Malformed JSON body." }, { status: 400 });
+  }
 
-  const run =
-    mode === "le_figaro_daily"
-      ? await (async () => {
-          const preview = await resolveLeFigaroDailyQuestion();
-          if (preview.status !== "available") {
-            return null;
-          }
-          return createLabRun({
+  let body: z.infer<typeof createRunRequestSchema>;
+  try {
+    body = createRunRequestSchema.parse(rawBody);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Invalid request payload." }, { status: 422 });
+    }
+    throw error;
+  }
+
+  const mode = body.mode ?? "manual";
+
+  let run;
+  try {
+    run =
+      mode === "le_figaro_daily"
+        ? await (async () => {
+            const preview = await resolveLeFigaroDailyQuestion();
+            if (preview.status !== "available") {
+              return null;
+            }
+            return createLabRun({
+              input: {
+                rawInput: preview.question,
+                inputType: "question",
+              },
+              mode,
+              audiencePreset: "le_figaro_reader",
+              promptSnapshot: preview.question,
+              promptSource: preview.promptSource,
+            });
+          })()
+        : await createLabRun({
             input: {
-              rawInput: preview.question,
-              inputType: "question",
+              rawInput: body.rawInput ?? "",
+              inputType: body.inputType ?? "question",
             },
             mode,
-            audiencePreset: "le_figaro_reader",
-            promptSnapshot: preview.question,
-            promptSource: preview.promptSource,
+            audiencePreset: "france_general",
+            promptSnapshot: body.rawInput ?? "",
           });
-        })()
-      : await createLabRun({
-          input: {
-            rawInput: body.rawInput ?? "",
-            inputType: inputTypeSchema.catch("question").parse(body.inputType),
-          },
-          mode,
-          audiencePreset: "france_general",
-          promptSnapshot: body.rawInput ?? "",
-        });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Invalid request payload." }, { status: 422 });
+    }
+    throw error;
+  }
 
   if (!run) {
     return NextResponse.json({ error: "Today’s Le Figaro question is unavailable." }, { status: 503 });
   }
 
-  void executeLabRun(run.id);
+  after(async () => {
+    try {
+      await executeLabRun(run.id);
+    } catch (error) {
+      console.error(`[lab:runs] Background execution failed for ${run.id}`, error);
+    }
+  });
 
   return NextResponse.json({ runId: run.id }, { status: 202 });
 }

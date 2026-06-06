@@ -243,8 +243,9 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   );
 
   const leFigaroAvailable = dailyQuestion?.status === "available";
+  const isRunActive = run?.status === "running";
   const submitDisabled =
-    run?.status === "running" ||
+    isRunActive ||
     (mode === "manual" ? rawInput.trim().length < 10 : isDailyQuestionLoading || !leFigaroAvailable);
 
   return (
@@ -318,7 +319,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
 
           <div className="lab-command-row">
             <button type="submit" className="accent-button" disabled={submitDisabled}>
-              {run?.status === "running" ? "Stop" : "Run"}
+              {isRunActive ? "Running…" : "Run"}
             </button>
             <div className="lab-status" aria-live="polite">
               {run ? (

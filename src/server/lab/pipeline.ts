@@ -9,6 +9,17 @@ import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
 import { type AudiencePreset, labInputSchema, type LabInput, type PersistedLabRun, type PromptSource, type RunMode, type StageId } from "../../lib/labSchemas";
 
+type SettledTask<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: unknown };
+
+function settleTask<T>(task: Promise<T>): Promise<SettledTask<T>> {
+  return task.then(
+    (value) => ({ ok: true, value }),
+    (error) => ({ ok: false, error }),
+  );
+}
+
 export async function createLabRun({
   input,
   mode,
@@ -79,7 +90,7 @@ export async function executeLabRun(runId: string) {
     });
     await persistRun();
 
-    const retrievalPromise = retrieveSources(currentRun.input);
+    const retrievalTask = settleTask(retrieveSources(currentRun.input));
 
     setStageStatus("population_mapping", "running", {
       summary: "Assigning the live persona sample to question-specific segments.",
@@ -105,7 +116,11 @@ export async function executeLabRun(runId: string) {
     });
     await persistRun();
 
-    const retrieval = await retrievalPromise;
+    const retrievalResult = await retrievalTask;
+    if (!retrievalResult.ok) {
+      throw retrievalResult.error;
+    }
+    const retrieval = retrievalResult.value;
     currentRun = { ...currentRun, retrieval };
     setStageStatus("retrieval", "completed", {
       summary: `Collected ${retrieval.sources.length} source cards across ${retrieval.outcomes.length} providers.`,
@@ -218,12 +233,22 @@ export async function executeLabRun(runId: string) {
     }
 
     if (currentRun) {
-      const activeStep =
-        currentRun.steps.find((step) => step.status === "running")?.id ??
-        currentRun.steps.find((step) => step.status === "pending")?.id ??
-        "population_mapping";
-
-      setStageStatus(activeStep, "failed", { error: message });
+      const now = new Date().toISOString();
+      currentRun = {
+        ...currentRun,
+        status: "failed",
+        error: message,
+        steps: currentRun.steps.map((step) =>
+          step.status === "running"
+            ? {
+                ...step,
+                status: "failed",
+                completedAt: now,
+                error: message,
+              }
+            : step,
+        ),
+      };
       await persistRun();
     } else {
       throw error;

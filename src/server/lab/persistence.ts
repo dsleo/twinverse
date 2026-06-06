@@ -1,7 +1,8 @@
 import "server-only";
 
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { ZodError } from "zod";
 import {
   defaultRunSteps,
   persistedLabRunSchema,
@@ -13,6 +14,21 @@ import {
   type RunStage,
   type StageId,
 } from "../../lib/labSchemas";
+
+export class RunNotFoundError extends Error {
+  constructor(runId: string) {
+    super(`Run not found: ${runId}`);
+    this.name = "RunNotFoundError";
+  }
+}
+
+export class RunStateCorruptError extends Error {
+  constructor(runId: string, cause?: unknown) {
+    super(`Persisted run state is unreadable for ${runId}.`);
+    this.name = "RunStateCorruptError";
+    this.cause = cause;
+  }
+}
 
 function dataRoot() {
   return process.env.LAB_DATA_ROOT || path.join(process.cwd(), "data");
@@ -50,6 +66,31 @@ export function getDailyQuestionCachePath(source: string, questionDate: string) 
 
 function getRunPath(runId: string) {
   return path.join(runsDir(), `${runId}.json`);
+}
+
+function getTempRunPath(runId: string) {
+  return path.join(runsDir(), `${runId}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`);
+}
+
+async function parseRunFile(runId: string, filePath: string) {
+  let contents: string;
+  try {
+    contents = await readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      throw new RunNotFoundError(runId);
+    }
+    throw error;
+  }
+
+  try {
+    return persistedLabRunSchema.parse(JSON.parse(contents));
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof ZodError) {
+      throw new RunStateCorruptError(runId, error);
+    }
+    throw error;
+  }
 }
 
 export function createRunId() {
@@ -93,27 +134,39 @@ export async function createRunRecord({
 
 export async function readRun(runId: string) {
   await ensureDirs();
-  const contents = await readFile(getRunPath(runId), "utf8");
-  return persistedLabRunSchema.parse(JSON.parse(contents));
+  return parseRunFile(runId, getRunPath(runId));
 }
 
 export async function writeRun(run: PersistedLabRun) {
   await ensureDirs();
   const nextRun = { ...run, updatedAt: nowIso() };
-  await writeFile(getRunPath(run.id), JSON.stringify(nextRun, null, 2), "utf8");
+  const runPath = getRunPath(run.id);
+  const tempPath = getTempRunPath(run.id);
+  await writeFile(tempPath, JSON.stringify(nextRun, null, 2), "utf8");
+  await rename(tempPath, runPath);
 }
 
 export async function listRuns() {
   await ensureDirs();
   const entries = await readdir(runsDir());
-  const runs = await Promise.all(
-    entries
-      .filter((entry) => entry.endsWith(".json"))
-      .map(async (entry) => {
-        const contents = await readFile(path.join(runsDir(), entry), "utf8");
-        return persistedLabRunSchema.parse(JSON.parse(contents));
-      }),
-  );
+  const runs = (
+    await Promise.all(
+      entries
+        .filter((entry) => entry.endsWith(".json"))
+        .map(async (entry) => {
+          const runId = entry.replace(/\.json$/, "");
+          try {
+            return await parseRunFile(runId, path.join(runsDir(), entry));
+          } catch (error) {
+            if (error instanceof RunNotFoundError || error instanceof RunStateCorruptError) {
+              console.warn(`[lab:persistence] Skipping unreadable run file ${entry}: ${error.message}`);
+              return null;
+            }
+            throw error;
+          }
+        }),
+    )
+  ).filter((run): run is PersistedLabRun => Boolean(run));
 
   return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

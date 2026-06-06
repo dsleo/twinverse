@@ -67,7 +67,7 @@ export type MetadataTagFilter = z.infer<typeof metadataTagFilterSchema>;
 export const rankingSignalSchema = z.object({
   family: z.union([scalarMetadataFamilySchema, vectorMetadataFamilySchema]),
   values: z.array(z.string().min(1)).min(1),
-  weight: z.number().positive().max(3).optional(),
+  weight: z.number().positive().max(3).nullable(),
 });
 export type RankingSignal = z.infer<typeof rankingSignalSchema>;
 

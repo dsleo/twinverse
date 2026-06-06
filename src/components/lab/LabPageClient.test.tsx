@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { LabPageClient } from "./LabPageClient";
 
 const originalFetch = globalThis.fetch;
@@ -79,5 +80,52 @@ describe("LabPageClient", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Run/i })).toBeDisabled();
     });
+  });
+
+  it("shows a truthful running label instead of a fake stop action", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ runId: "lab-123" }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "lab-123",
+          createdAt: "2026-06-05T08:00:00.000Z",
+          updatedAt: "2026-06-05T08:00:01.000Z",
+          status: "running",
+          mode: "manual",
+          audiencePreset: "france_general",
+          input: {
+            rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+            inputType: "question",
+          },
+          promptSnapshot: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+          steps: [
+            { id: "population_mapping", label: "Population mapping", status: "running", diagnostics: {}, summary: "Assigning personas." },
+            { id: "retrieval", label: "Retrieval", status: "running", diagnostics: {} },
+            { id: "context_packs", label: "Context packs", status: "pending", diagnostics: {} },
+            { id: "persona_reactions", label: "Persona reactions", status: "pending", diagnostics: {} },
+            { id: "divergence_report", label: "Divergence report", status: "pending", diagnostics: {} },
+          ],
+          panel: [],
+          contextPacks: [],
+          reactions: [],
+          rawModelDiagnostics: [],
+        }),
+      } as Response);
+
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    render(<LabPageClient fixedMode="manual" />);
+
+    await userEvent.click(screen.getByRole("button", { name: /Run/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Running…/i })).toBeDisabled();
+    });
+    expect(screen.queryByRole("button", { name: /Stop/i })).not.toBeInTheDocument();
   });
 });

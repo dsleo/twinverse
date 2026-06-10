@@ -122,10 +122,13 @@ export async function createRunRecord({
     input,
     promptSnapshot,
     promptSource,
-    steps: defaultRunSteps(),
+    steps: defaultRunSteps(mode),
     panel: [],
     contextPacks: [],
     reactions: [],
+    tvSchedule: [],
+    tvViewingChoices: [],
+    tvPredictions: [],
     rawModelDiagnostics: [],
   };
   await writeRun(run);

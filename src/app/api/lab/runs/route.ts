@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { inputTypeSchema, runModeSchema } from "../../../../lib/labSchemas";
 import { resolveLeFigaroDailyQuestion } from "../../../../server/lab/dailyQuestion";
 import { createLabRun, executeLabRun } from "../../../../server/lab/pipeline";
+import { createTvAudienceRun } from "../../../../server/lab/tvPipeline";
 import { listRuns } from "../../../../server/lab/persistence";
 
 export const runtime = "nodejs";
@@ -11,6 +12,7 @@ const createRunRequestSchema = z.object({
   rawInput: z.string().optional(),
   inputType: inputTypeSchema.optional(),
   mode: runModeSchema.optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export async function GET() {
@@ -49,33 +51,46 @@ export async function POST(request: Request) {
 
   let run;
   try {
-    run =
-      mode === "le_figaro_daily"
-        ? await (async () => {
-            const preview = await resolveLeFigaroDailyQuestion();
-            if (preview.status !== "available") {
-              return null;
-            }
-            return createLabRun({
-              input: {
-                rawInput: preview.question,
-                inputType: "question",
-              },
-              mode,
-              audiencePreset: "le_figaro_reader",
-              promptSnapshot: preview.question,
-              promptSource: preview.promptSource,
-            });
-          })()
-        : await createLabRun({
-            input: {
-              rawInput: body.rawInput ?? "",
-              inputType: body.inputType ?? "question",
-            },
-            mode,
-            audiencePreset: "france_general",
-            promptSnapshot: body.rawInput ?? "",
-          });
+    if (mode === "le_figaro_daily") {
+      const preview = await resolveLeFigaroDailyQuestion();
+      if (preview.status !== "available") {
+        return NextResponse.json({ error: "Today’s Le Figaro question is unavailable." }, { status: 503 });
+      }
+      run = await createLabRun({
+        input: {
+          rawInput: preview.question,
+          inputType: "question",
+        },
+        mode,
+        audiencePreset: "le_figaro_reader",
+        promptSnapshot: preview.question,
+        promptSource: preview.promptSource,
+      });
+    } else if (mode === "tv_audience_daily") {
+      if (!body.date) {
+        return NextResponse.json({ error: "tv_audience_daily mode requires a date parameter (YYYY-MM-DD)." }, { status: 422 });
+      }
+      run = await createTvAudienceRun({
+        input: {
+          rawInput: `TV schedule for ${body.date}`,
+          inputType: "other",
+          date: body.date,
+        },
+        audiencePreset: "france_tv_viewer",
+        promptSnapshot: `TV Audience Prediction for ${body.date}`,
+        date: body.date,
+      });
+    } else {
+      run = await createLabRun({
+        input: {
+          rawInput: body.rawInput ?? "",
+          inputType: body.inputType ?? "question",
+        },
+        mode,
+        audiencePreset: "france_general",
+        promptSnapshot: body.rawInput ?? "",
+      });
+    }
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "Invalid request payload." }, { status: 422 });
@@ -84,7 +99,7 @@ export async function POST(request: Request) {
   }
 
   if (!run) {
-    return NextResponse.json({ error: "Today’s Le Figaro question is unavailable." }, { status: 503 });
+    return NextResponse.json({ error: "Failed to create run." }, { status: 500 });
   }
 
   after(async () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
+import { TvAudienceResult } from "./TvAudienceResult";
 import { runModeLabels } from "../../lib/labAudience";
 import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
 
@@ -531,6 +532,18 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             ))}
           </ul>
           <p className="lab-warning">{run.aggregateReport.caveats.join(" ")}</p>
+        </section>
+      ) : null}
+
+      {run?.tvPredictions && run.tvPredictions.length > 0 ? (
+        <section id="tv-predictions" className="lab-card">
+          <div className="section-heading section-heading-compact">
+            <div>
+              <div className="section-label">TV audience predictions</div>
+              <h2>Predicted vs. actual market share</h2>
+            </div>
+          </div>
+          <TvAudienceResult run={run} />
         </section>
       ) : null}
 

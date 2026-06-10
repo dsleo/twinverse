@@ -44,28 +44,30 @@ function cleanText(text: string): string {
  * Implementation based on Python scraper logic.
  */
 async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> {
+  console.log(`[scraper] Fetching report content from: ${url}`);
   const html = await fetchHtml(url);
   const schedule: TVScheduleItem[] = [];
 
+  console.log(`[scraper] HTML length: ${html.length} characters`);
+
   // Try Pattern 1: Table parsing (Standard Figaro format)
-  // We'll use regex to find table rows since we don't have a DOM parser in this env
+  // Pattern: <td class="fig-tv-audience__program-title">...</td>
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
 
   while ((rowMatch = rowRegex.exec(html)) !== null) {
     const rowHtml = rowMatch[1];
     
-    // Look for program title
-    const programMatch = rowHtml.match(/class=["']fig-tv-audience__program-title["'][^>]*>([^<]+)/i);
-    const audienceMatch = rowHtml.match(/class=["']fig-tv-audience__spectateur["'][^>]*>([^<]+)/i);
-    const pdaMatch = rowHtml.match(/class=["']fig-tv-audience__audience["'][^>]*>([^<]+)/i);
+    // Look for program title and audience info
+    const programMatch = rowHtml.match(/class=["']fig-tv-audience__program-title["'][^>]*>([\s\S]*?)<\/td>/i);
+    const audienceMatch = rowHtml.match(/class=["']fig-tv-audience__spectateur["'][^>]*>([\s\S]*?)<\/td>/i);
+    const pdaMatch = rowHtml.match(/class=["']fig-tv-audience__audience["'][^>]*>([\s\S]*?)<\/td>/i);
     
     if (programMatch && audienceMatch) {
-      const programName = cleanText(programMatch[1]);
-      const shareStr = pdaMatch ? cleanText(pdaMatch[1]).replace('%', '').replace(',', '.').trim() : "";
+      const programName = cleanText(programMatch[1].replace(/<[^>]+>/g, ""));
+      const shareStr = pdaMatch ? cleanText(pdaMatch[1].replace(/<[^>]+>/g, "")).replace('%', '').replace(',', '.').trim() : "";
       const actualShare = parseFloat(shareStr) || undefined;
       
-      // Extract channel from title or image alt
       let channel = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
       const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
@@ -77,7 +79,6 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       }
       
       if (!channel) {
-        // Fallback: search for hints in row text
         const rowText = cleanText(rowHtml.replace(/<[^>]+>/g, " "));
         for (const hint of CHANNEL_HINTS) {
           if (new RegExp(`\\b${hint}\\b`, 'i').test(rowText)) {
@@ -100,14 +101,17 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
     }
   }
 
+  console.log(`[scraper] Pattern 1 (Table) found ${schedule.length} items`);
+
   // Try Pattern 2: Text extraction (Fallback for older or variant formats)
   if (schedule.length === 0) {
-    // Look for "1. [Program] ([Channel]) : [Viewers] ([Share])" in paragraphs
-    const pRegex = /<p[^>]*>(\d+)\.\s+([^<]+)<\/p>/gi;
-    let pMatch;
+    // Look for "1. [Program] ([Channel]) : [Viewers] ([Share])" in paragraphs or list items
+    const listRegex = /(?:<p[^>]*>|<li>)(\d+)\.\s+([^<]+)(?:<\/p>|<\/li>)/gi;
+    let listMatch;
     
-    while ((pMatch = pRegex.exec(html)) !== null) {
-      const line = cleanText(pMatch[2]);
+    while ((listMatch = listRegex.exec(html)) !== null) {
+      const line = cleanText(listMatch[2]);
+      // Pattern: Program Name (Channel) : 1 234 000 téléspectateurs (12,3 %)
       const parts = line.match(/^(.+?)\s*\(([^)]+)\)\s*[:]\s*(.+?)\s+téléspectateurs\s*\((.+?)\s*%\)$/i);
       
       if (parts) {
@@ -122,12 +126,12 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         });
       }
     }
+    console.log(`[scraper] Pattern 2 (Text List) found ${schedule.length} items`);
   }
 
   // Try Pattern 3: Generic channel-program mapping (Last resort)
   if (schedule.length === 0) {
     for (const channel of CHANNEL_HINTS) {
-      // Look for "[Channel] - [Program]" or "[Channel] : [Program]"
       const genericRegex = new RegExp(`${channel}\\s+[-:]\\s+([^<.(]+)`, 'i');
       const match = html.match(genericRegex);
       if (match) {
@@ -140,6 +144,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         });
       }
     }
+    console.log(`[scraper] Pattern 3 (Generic) found ${schedule.length} items`);
   }
 
   return schedule;

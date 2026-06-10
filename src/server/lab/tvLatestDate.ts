@@ -82,18 +82,20 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       let channel = "";
       let channelLogoUrl = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
-      const channelImgMatch = rowHtml.match(/<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["']/i);
-      
+      const channelSrcMatch = rowHtml.match(/<img[^>]*src=["']([^"']+)["']/i);
+      const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
+
       if (channelTitleMatch) {
         channel = cleanText(channelTitleMatch[1]).replace("Programme TV ", "");
       }
-      
-      if (channelImgMatch) {
-        const src = channelImgMatch[1];
+
+      if (channelSrcMatch) {
+        const src = channelSrcMatch[1];
         channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
-        if (!channel) {
-          channel = cleanText(channelImgMatch[2]).replace("Programme TV ", "");
-        }
+      }
+
+      if (!channel && channelAltMatch) {
+        channel = cleanText(channelAltMatch[1]).replace("Programme TV ", "");
       }
       
       if (!channel) {
@@ -115,6 +117,8 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
           durationMinutes: 120,
           actualShare,
           channelLogoUrl: channelLogoUrl || undefined,
+          isFootballMatch: false,
+          isHoliday: false,
         });
       }
     }
@@ -132,10 +136,12 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         schedule.push({
           channel: cleanText(channel),
           programName: cleanProgramName(programName),
-          genre: "Prime",
+          genre: "",
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare: parseFloat(shareStr.replace(',', '.')) || undefined,
+          isFootballMatch: false,
+          isHoliday: false,
         });
       }
     }

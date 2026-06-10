@@ -74,11 +74,15 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const [isDailyQuestionLoading, setIsDailyQuestionLoading] = useState(fixedMode === "le_figaro_daily" || showModePicker);
 
   const isLeFigaroMode = mode === "le_figaro_daily";
-  const heroTitle = isLeFigaroMode && !showModePicker ? "Le Figaro, as it lands." : "Ask. See how it lands.";
+  const isTvMode = mode === "tv_audience_daily";
+
+  const heroTitle = isLeFigaroMode && !showModePicker ? "Le Figaro, as it lands." : isTvMode ? "TV Audience Prediction" : "Ask. See how it lands.";
   const heroLede =
     isLeFigaroMode && !showModePicker
       ? ""
-      : "An agentic system combines live context with tailored synthetic personas to simulate audience reaction.";
+      : isTvMode
+        ? "Simulate how French audiences choose their evening programs based on persona traits and schedule context."
+        : "An agentic system combines live context with tailored synthetic personas to simulate audience reaction.";
 
   useEffect(() => {
     if (fixedMode) {
@@ -180,13 +184,15 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
     setIsPackOpen(false);
 
     try {
+      const isTvMode = mode === "tv_audience_daily";
       const response = await fetch("/api/lab/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           mode,
           rawInput: mode === "manual" ? rawInput : undefined,
-          inputType: "question" satisfies InputType,
+          inputType: isTvMode ? "other" : ("question" satisfies InputType),
+          date: isTvMode ? "2026-06-07" : undefined,
         }),
       });
 
@@ -247,7 +253,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const isRunActive = run?.status === "running";
   const submitDisabled =
     isRunActive ||
-    (mode === "manual" ? rawInput.trim().length < 10 : isDailyQuestionLoading || !leFigaroAvailable);
+    (mode === "manual" ? rawInput.trim().length < 10 : mode === "le_figaro_daily" ? isDailyQuestionLoading || !leFigaroAvailable : false);
 
   return (
     <div className="lab-page page-shell">
@@ -304,6 +310,16 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               </div>
 
               {leFigaroAvailable ? <p className="lab-readonly-question">{dailyQuestion.question}</p> : <p>{dailyQuestion?.message ?? "Loading today’s Le Figaro question."}</p>}
+            </article>
+          ) : isTvMode ? (
+            <article className="lab-readonly-prompt">
+              <div className="card-topline">
+                <div>
+                  <div className="section-label">Target date</div>
+                  <p className="lab-question-date">{formatQuestionDate("2026-06-07")}</p>
+                </div>
+              </div>
+              <p className="lab-readonly-question">Simulating evening viewing choice for the 20:00 primetime slot.</p>
             </article>
           ) : (
             <textarea

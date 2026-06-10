@@ -368,17 +368,19 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                 )}
               </div>
               <p className="lab-readonly-question">Simulating primetime viewing choice:</p>
-              {latestTvDate?.schedule && (
-                <ul className="lab-schedule-list" style={{ marginTop: "1rem", listStyle: "none", padding: 0, fontSize: "0.9rem", opacity: 0.8 }}>
-                  {latestTvDate.schedule.slice(0, 8).map((item, i) => (
-                    <li key={i} style={{ marginBottom: "0.4rem", display: "flex", gap: "0.5rem" }}>
-                      <span style={{ fontWeight: "bold", minWidth: "80px" }}>{item.channel}</span>
-                      <span>{item.programName}</span>
-                      <span style={{ fontStyle: "italic", marginLeft: "auto", fontSize: "0.8rem" }}>({item.genre})</span>
+              {latestTvDate?.schedule && latestTvDate.schedule.length > 0 ? (
+                <ul className="lab-schedule-list" style={{ marginTop: "1rem", listStyle: "none", padding: 0, fontSize: "0.9rem" }}>
+                  {latestTvDate.schedule.slice(0, 10).map((item, i) => (
+                    <li key={i} style={{ marginBottom: "0.5rem", display: "flex", gap: "0.5rem", borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.2rem' }}>
+                      <span style={{ fontWeight: "bold", minWidth: "90px", opacity: 0.9 }}>{item.channel}</span>
+                      <span style={{ opacity: 1 }}>{item.programName}</span>
+                      <span style={{ fontStyle: "italic", marginLeft: "auto", fontSize: "0.8rem", opacity: 0.6 }}>({item.genre})</span>
                     </li>
                   ))}
-                  {latestTvDate.schedule.length > 8 && <li style={{ fontSize: "0.8rem" }}>+ {latestTvDate.schedule.length - 8} other programs</li>}
+                  {latestTvDate.schedule.length > 10 && <li style={{ fontSize: "0.8rem", opacity: 0.5, marginTop: '0.5rem' }}>+ {latestTvDate.schedule.length - 10} other programs in schedule</li>}
                 </ul>
+              ) : isTvDateLoading ? null : (
+                <p style={{ marginTop: "1rem", fontSize: "0.9rem", opacity: 0.6 }}>No schedule data available for this date.</p>
               )}
             </article>
           ) : (

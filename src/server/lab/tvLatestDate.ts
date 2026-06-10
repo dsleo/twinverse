@@ -1,9 +1,18 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const FIGARO_AUDIENCES_URL = "https://tvmag.lefigaro.fr/programme-tv/audiences-tv/";
+
+function getLatestCsvDate(): string {
+  const csvPath = resolve(process.cwd(), "data/tv-audience/audiences_figaro_2_weeks.csv");
+  const content = readFileSync(csvPath, "utf-8");
+  const lines = content.split("\n").filter(l => l.trim().length > 0);
+  const dates = lines.slice(1).map(line => line.split(",")[0]);
+  const uniqueDates = Array.from(new Set(dates)).sort();
+  return uniqueDates[uniqueDates.length - 1] || "2026-06-07";
+}
 
 async function fetchFigaroAudiencesHtml() {
   const response = await fetch(FIGARO_AUDIENCES_URL, {
@@ -22,6 +31,8 @@ async function fetchFigaroAudiencesHtml() {
 }
 
 export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: string; reportUrl: string }> {
+  const latestCsvDate = getLatestCsvDate();
+  
   try {
     const html = await fetchFigaroAudiencesHtml();
     
@@ -45,8 +56,15 @@ export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: strin
     const publishDate = new Date(`${year}-${month}-${day}T12:00:00Z`);
     const targetDateObj = new Date(publishDate.getTime() - 24 * 60 * 60 * 1000);
     
-    const targetDate = targetDateObj.toISOString().split('T')[0];
+    const scrapedDate = targetDateObj.toISOString().split('T')[0];
     const reportUrl = url.startsWith('http') ? url : `https://tvmag.lefigaro.fr${url}`;
+
+    // Verify if the scraped date exists as a primary record in our dataset
+    const csvPath = resolve(process.cwd(), "data/tv-audience/audiences_figaro_2_weeks.csv");
+    const csvContent = readFileSync(csvPath, "utf-8");
+    const hasData = csvContent.split("\n").some(line => line.startsWith(scrapedDate + ","));
+    
+    const targetDate = hasData ? scrapedDate : latestCsvDate;
 
     return {
       targetDate,
@@ -54,10 +72,8 @@ export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: strin
     };
   } catch (error) {
     console.error("[tvLatestDate] Failed to resolve latest date:", error);
-    // Fallback to a sensible default if scraping fails
-    // In a real app, you might want to return the last known good date
     return {
-      targetDate: "2026-06-09",
+      targetDate: latestCsvDate,
       reportUrl: FIGARO_AUDIENCES_URL
     };
   }

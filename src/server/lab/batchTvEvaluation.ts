@@ -172,67 +172,29 @@ async function runPredictionForDate(date: string, panel: NormalizedPersona[]): P
     throw new Error(`No schedule found for ${date}`);
   }
 
-  // Batch personas into 5 segments
-  const segmentSize = Math.ceil(panel.length / 5);
-  const segments = [];
-  for (let i = 0; i < 5; i++) {
-    const start = i * segmentSize;
-    const end = Math.min(start + segmentSize, panel.length);
-    segments.push(panel.slice(start, end));
-  }
-
-  // Process segments in parallel
-  console.log(`[batch] ${date}: Processing 5 segments in parallel...`);
-  const segmentResults = await Promise.allSettled(
-    segments.map((segmentPersonas, i) => {
-      const segmentId = `batch_segment_${i}`;
-      return buildViewingPreferencesForSegment(
-        {
-          id: segmentId,
-          label: `Segment ${i + 1}`,
-          summary: `Personas ${i * segmentSize + 1}-${Math.min((i + 1) * segmentSize, panel.length)}`,
-          concerns: ["TV viewing behavior"],
-          informationNeeds: ["Program schedule"],
-          inclusionTags: [],
-          exclusionTags: [],
-          rankingCriteria: ["Viewing preferences"],
-          preferredDiversityHints: [],
-          rankingSignals: [],
-          memberPersonaIds: segmentPersonas.map((p: NormalizedPersona) => p.id),
-          representativePersonaIds: segmentPersonas.slice(0, 3).map((p: NormalizedPersona) => p.id),
-          evaluatedPersonaIds: segmentPersonas.slice(0, 2).map((p: NormalizedPersona) => p.id),
-        },
-        segmentPersonas,
-        schedule,
-      );
-    })
+  // Process full panel in a single call
+  console.log(`[batch] ${date}: Processing full panel of ${panel.length} personas...`);
+  const result = await buildViewingPreferencesForSegment(
+    {
+      id: "full_panel",
+      label: "Full Panel",
+      summary: `All ${panel.length} panel personas for TV viewing preferences`,
+      concerns: ["TV viewing behavior"],
+      informationNeeds: ["Program schedule"],
+      inclusionTags: [],
+      exclusionTags: [],
+      rankingCriteria: ["Viewing preferences"],
+      preferredDiversityHints: [],
+      rankingSignals: [],
+      memberPersonaIds: panel.map((p: NormalizedPersona) => p.id),
+      representativePersonaIds: panel.slice(0, 3).map((p: NormalizedPersona) => p.id),
+      evaluatedPersonaIds: panel.slice(0, 2).map((p: NormalizedPersona) => p.id),
+    },
+    panel,
+    schedule,
   );
 
-  const viewingChoices: any[] = [];
-  const failedSegments: number[] = [];
-
-  // Collect results
-  segmentResults.forEach((result, i) => {
-    if (result.status === "fulfilled") {
-      viewingChoices.push(...result.value.choices);
-    } else {
-      failedSegments.push(i);
-      console.warn(`[batch] ${date} segment ${i} failed: ${result.reason}`);
-    }
-  });
-
-  // Fail if ALL segments failed (no data to work with)
-  if (viewingChoices.length === 0) {
-    throw new Error(`All segments failed for ${date}`);
-  }
-
-  // Warn if some segments failed but we have partial data
-  if (failedSegments.length > 0) {
-    console.warn(
-      `[batch] ${date} evaluated with ${viewingChoices.length}/${panel.length} personas ` +
-      `(segments [${failedSegments.join(", ")}] failed)`,
-    );
-  }
+  const viewingChoices = result.choices;
 
   // Aggregate
   const predictions = aggregateViewingChoices(viewingChoices, schedule);

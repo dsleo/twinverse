@@ -128,6 +128,7 @@ export async function buildViewingPreferencesForSegment(
         traits: persona.traits,
         concerns: persona.concerns,
         profileNarrative: persona.profileNarrative,
+        ...(persona.tvPreferenceDescription && { tvPreferenceDescription: persona.tvPreferenceDescription }),
       })),
       instruction: `For each program in the schedule, first provide a 'rationale' explaining the persona's thought process for their viewing preferences tonight, considering their traits, concerns, and the program's genre, channel, and any special context (football matches, holiday programming). Then, assign a probability (0.0–1.0) for each program reflecting how likely they are to watch it. All probabilities must sum to exactly 1.0. Use the exact program names from the programNames list above.`,
       responseExample: `{

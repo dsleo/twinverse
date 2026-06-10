@@ -183,63 +183,28 @@ export async function executeTvAudienceRun(runId: string) {
     });
     await persistRun();
 
-    // Build segments from the assignment (if available) or create ad-hoc segments
-    // For simplicity, we'll batch personas into 5 equal segments
-    const segmentSize = Math.ceil(panel.length / 5);
-    const segments = [];
-    for (let i = 0; i < 5; i++) {
-      const start = i * segmentSize;
-      const end = Math.min(start + segmentSize, panel.length);
-      segments.push(panel.slice(start, end));
-    }
-
-    const segmentResults = await Promise.allSettled(
-      segments.map((segmentPersonas, i) => {
-        const segmentId = `tv_segment_${i}`;
-        return buildViewingPreferencesForSegment(
-          {
-            id: segmentId,
-            label: `TV Viewer Group ${i + 1}`,
-            summary: `Personas ${i * segmentSize + 1}-${Math.min((i + 1) * segmentSize, panel.length)}`,
-            concerns: ["TV viewing behavior"],
-            informationNeeds: ["Program schedule and details"],
-            inclusionTags: [],
-            exclusionTags: [],
-            rankingCriteria: ["Personal viewing preferences"],
-            preferredDiversityHints: [],
-            rankingSignals: [],
-            memberPersonaIds: segmentPersonas.map((p: NormalizedPersona) => p.id),
-            representativePersonaIds: segmentPersonas.slice(0, 3).map((p: NormalizedPersona) => p.id),
-            evaluatedPersonaIds: segmentPersonas.slice(0, 2).map((p: NormalizedPersona) => p.id),
-          },
-          segmentPersonas,
-          schedule,
-        );
-      })
+    // Process full panel in a single call
+    const result = await buildViewingPreferencesForSegment(
+      {
+        id: "full_panel",
+        label: "Full Panel",
+        summary: `All ${panel.length} panel personas for TV viewing preferences`,
+        concerns: ["TV viewing behavior"],
+        informationNeeds: ["Program schedule and details"],
+        inclusionTags: [],
+        exclusionTags: [],
+        rankingCriteria: ["Personal viewing preferences"],
+        preferredDiversityHints: [],
+        rankingSignals: [],
+        memberPersonaIds: panel.map((p: NormalizedPersona) => p.id),
+        representativePersonaIds: panel.slice(0, 3).map((p: NormalizedPersona) => p.id),
+        evaluatedPersonaIds: panel.slice(0, 2).map((p: NormalizedPersona) => p.id),
+      },
+      panel,
+      schedule,
     );
 
-    const viewingChoices: typeof currentRun.tvViewingChoices = [];
-    const failedSegments: number[] = [];
-
-    segmentResults.forEach((result, i) => {
-      if (result.status === "fulfilled") {
-        viewingChoices.push(...result.value.choices);
-      } else {
-        failedSegments.push(i);
-        console.warn(`[tv-pipeline] Segment ${i} failed: ${result.reason}`);
-      }
-    });
-
-    if (viewingChoices.length === 0) {
-      throw new Error(`All viewing preference segments failed for ${date}`);
-    }
-
-    if (failedSegments.length > 0) {
-      console.warn(
-        `[tv-pipeline] ${date} evaluated with ${viewingChoices.length}/${panel.length} personas ` +
-        `(segments [${failedSegments.join(", ")}] failed)`,
-      );
-    }
+    const viewingChoices = result.choices;
 
     currentRun = {
       ...currentRun,
@@ -249,9 +214,7 @@ export async function executeTvAudienceRun(runId: string) {
     setStageStatus("tv_preference_elicitation", "completed", {
       summary: `Elicited viewing preferences from ${viewingChoices.length} personas.`,
       diagnostics: {
-        segmentsProcessed: `${segmentResults.length - failedSegments.length}`,
         totalPersonas: `${viewingChoices.length}`,
-        failedSegments: failedSegments.length > 0 ? failedSegments.join(",") : "none",
       },
     });
     await persistRun();

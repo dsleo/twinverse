@@ -71,7 +71,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [isPackOpen, setIsPackOpen] = useState(false);
   const [dailyQuestion, setDailyQuestion] = useState<DailyQuestionPreview | null>(null);
-  const [latestTvDate, setLatestTvDate] = useState<{ targetDate: string; reportUrl: string } | null>(null);
+  const [latestTvDate, setLatestTvDate] = useState<{ targetDate: string; reportUrl: string; schedule?: any[] } | null>(null);
   const [isDailyQuestionLoading, setIsDailyQuestionLoading] = useState(fixedMode === "le_figaro_daily" || showModePicker);
   const [isTvDateLoading, setIsTvDateLoading] = useState(fixedMode === "tv_audience_daily");
 
@@ -367,7 +367,19 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                   </a>
                 )}
               </div>
-              <p className="lab-readonly-question">Simulating evening viewing choice for the 20:00 primetime slot.</p>
+              <p className="lab-readonly-question">Simulating primetime viewing choice:</p>
+              {latestTvDate?.schedule && (
+                <ul className="lab-schedule-list" style={{ marginTop: "1rem", listStyle: "none", padding: 0, fontSize: "0.9rem", opacity: 0.8 }}>
+                  {latestTvDate.schedule.slice(0, 8).map((item, i) => (
+                    <li key={i} style={{ marginBottom: "0.4rem", display: "flex", gap: "0.5rem" }}>
+                      <span style={{ fontWeight: "bold", minWidth: "80px" }}>{item.channel}</span>
+                      <span>{item.programName}</span>
+                      <span style={{ fontStyle: "italic", marginLeft: "auto", fontSize: "0.8rem" }}>({item.genre})</span>
+                    </li>
+                  ))}
+                  {latestTvDate.schedule.length > 8 && <li style={{ fontSize: "0.8rem" }}>+ {latestTvDate.schedule.length - 8} other programs</li>}
+                </ul>
+              )}
             </article>
           ) : (
             <textarea

@@ -352,12 +352,19 @@ export function refreshPersonaMetadata(persona: NormalizedPersona): NormalizedPe
     urbanicity: persona.urbanicity,
   });
 
+  const tvPreferenceDescription = inferTvPreferenceDescription(
+    assignmentMetadata.life_stage,
+    assignmentMetadata.household_type,
+    assignmentMetadata.employment_class,
+  );
+
   return normalizedPersonaSchema.parse({
     ...persona,
     housingStatus: persona.housingStatus === "mixed_housing" ? assignmentMetadata.housing_status : persona.housingStatus,
     mobilityProfile: persona.mobilityProfile === "mixed_mobility" ? assignmentMetadata.mobility_profile : persona.mobilityProfile,
     urbanicity: persona.urbanicity === "mixed_urbanicity" ? assignmentMetadata.urbanicity : persona.urbanicity,
     assignmentMetadata,
+    tvPreferenceDescription,
   });
 }
 
@@ -387,6 +394,7 @@ export function normalizePersonaRow(row: Record<string, unknown>, sampleVersion:
     traits,
     concerns,
     profileNarrative,
+    tvPreferenceDescription: "",
   };
 
   return refreshPersonaMetadata(

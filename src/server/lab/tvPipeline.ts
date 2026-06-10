@@ -186,21 +186,21 @@ export async function executeTvAudienceRun(runId: string) {
     // Build segments from the assignment (if available) or create ad-hoc segments
     // For simplicity, we'll batch personas into 5 equal segments
     const segmentSize = Math.ceil(panel.length / 5);
-    const viewingChoices: typeof currentRun.tvViewingChoices = [];
-    const diagnostics: Record<string, string> = {};
-
+    const segments = [];
     for (let i = 0; i < 5; i++) {
       const start = i * segmentSize;
       const end = Math.min(start + segmentSize, panel.length);
-      const segmentPersonas = panel.slice(start, end);
-      const segmentId = `tv_segment_${i}`;
+      segments.push(panel.slice(start, end));
+    }
 
-      try {
-        const { choices } = await buildViewingPreferencesForSegment(
+    const segmentResults = await Promise.allSettled(
+      segments.map((segmentPersonas, i) => {
+        const segmentId = `tv_segment_${i}`;
+        return buildViewingPreferencesForSegment(
           {
             id: segmentId,
             label: `TV Viewer Group ${i + 1}`,
-            summary: `Personas ${start + 1}-${end}`,
+            summary: `Personas ${i * segmentSize + 1}-${Math.min((i + 1) * segmentSize, panel.length)}`,
             concerns: ["TV viewing behavior"],
             informationNeeds: ["Program schedule and details"],
             inclusionTags: [],
@@ -215,12 +215,30 @@ export async function executeTvAudienceRun(runId: string) {
           segmentPersonas,
           schedule,
         );
+      })
+    );
 
-        viewingChoices.push(...choices);
-        diagnostics[segmentId] = `${choices.length} personas`;
-      } catch (error) {
-        throw new Error(`Failed to elicit preferences for segment ${i}: ${error}`);
+    const viewingChoices: typeof currentRun.tvViewingChoices = [];
+    const failedSegments: number[] = [];
+
+    segmentResults.forEach((result, i) => {
+      if (result.status === "fulfilled") {
+        viewingChoices.push(...result.value.choices);
+      } else {
+        failedSegments.push(i);
+        console.warn(`[tv-pipeline] Segment ${i} failed: ${result.reason}`);
       }
+    });
+
+    if (viewingChoices.length === 0) {
+      throw new Error(`All viewing preference segments failed for ${date}`);
+    }
+
+    if (failedSegments.length > 0) {
+      console.warn(
+        `[tv-pipeline] ${date} evaluated with ${viewingChoices.length}/${panel.length} personas ` +
+        `(segments [${failedSegments.join(", ")}] failed)`,
+      );
     }
 
     currentRun = {

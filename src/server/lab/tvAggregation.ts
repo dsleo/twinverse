@@ -156,8 +156,9 @@ function loadActualAudience(date: string): Map<string, { share: number; rank: nu
 export function evaluateAgainstActual(
   date: string,
   predictions: PredictedAudienceShare[],
+  actualDataOverride?: Map<string, { share: number; rank: number }>,
 ): EvaluationResult {
-  const actual = loadActualAudience(date);
+  const actual = actualDataOverride || loadActualAudience(date);
 
   if (actual.size === 0) {
     throw new Error(`No actual audience data found for date ${date}`);

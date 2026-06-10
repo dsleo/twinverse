@@ -131,6 +131,7 @@ export const tvScheduleItemSchema = z.object({
   genre: z.string().min(1),
   timeSlot: z.string().min(1),
   durationMinutes: z.number().int().positive().nullable(),
+  actualShare: z.number().min(0).max(100).optional(),
   isFootballMatch: z.boolean().default(false),
   isHoliday: z.boolean().default(false),
 });

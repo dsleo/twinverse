@@ -18,7 +18,8 @@
       "Bash(npm run:*)",
       "Bash(pkill -f \"next dev\")",
       "Bash(python3:*)",
-      "Bash(awk '{print NR+45, $0}')"
+      "Bash(awk '{print NR+45, $0}')",
+      "Bash(git checkout:*)"
     ]
   }
 }

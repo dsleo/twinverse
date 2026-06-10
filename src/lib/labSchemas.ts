@@ -3,10 +3,10 @@ import { z } from "zod";
 export const inputTypeSchema = z.enum(["question", "article", "proposal", "speech", "poll_question", "other"]);
 export type InputType = z.infer<typeof inputTypeSchema>;
 
-export const runModeSchema = z.enum(["manual", "le_figaro_daily"]);
+export const runModeSchema = z.enum(["manual", "le_figaro_daily", "tv_audience_daily"]);
 export type RunMode = z.infer<typeof runModeSchema>;
 
-export const audiencePresetSchema = z.enum(["france_general", "le_figaro_reader"]);
+export const audiencePresetSchema = z.enum(["france_general", "le_figaro_reader", "france_tv_viewer"]);
 export type AudiencePreset = z.infer<typeof audiencePresetSchema>;
 
 export const providerSchema = z.enum(["wikipedia", "rss", "reddit", "vie_publique", "data_gouv"]);
@@ -18,6 +18,11 @@ export const stageIdSchema = z.enum([
   "context_packs",
   "persona_reactions",
   "divergence_report",
+  "tv_schedule_ingestion",
+  "tv_panel_loading",
+  "tv_preference_elicitation",
+  "tv_vote_aggregation",
+  "tv_evaluation",
 ]);
 export type StageId = z.infer<typeof stageIdSchema>;
 
@@ -119,9 +124,62 @@ export const personaCacheSchema = z.object({
 });
 export type PersonaCache = z.infer<typeof personaCacheSchema>;
 
+export const tvScheduleItemSchema = z.object({
+  channel: z.string().min(1),
+  programName: z.string().min(1),
+  genre: z.string().min(1),
+  timeSlot: z.string().min(1),
+  durationMinutes: z.number().int().positive().nullable(),
+});
+export type TVScheduleItem = z.infer<typeof tvScheduleItemSchema>;
+
+export const personaViewingChoiceSchema = z.object({
+  personaId: z.string().min(1),
+  segmentId: z.string().min(1),
+  scores: z.array(
+    z.object({
+      programName: z.string().min(1),
+      probability: z.number().min(0).max(1),
+    }),
+  ).min(1).refine(
+    (arr) => Math.abs(arr.reduce((sum, x) => sum + x.probability, 0) - 1.0) < 0.01,
+    { message: "Probabilities must sum to 1.0 (±0.01 tolerance)" },
+  ),
+  rationale: z.string().min(1),
+});
+export type PersonaViewingChoice = z.infer<typeof personaViewingChoiceSchema>;
+
+export const predictedAudienceShareSchema = z.object({
+  programName: z.string().min(1),
+  channel: z.string().min(1),
+  predictedSharePct: z.number().min(0).max(100),
+  voteCount: z.number().int().nonnegative(),
+  weightedScore: z.number().nonnegative(),
+  predictedRank: z.number().int().positive(),
+});
+export type PredictedAudienceShare = z.infer<typeof predictedAudienceShareSchema>;
+
+export const evaluationResultSchema = z.object({
+  date: z.string().min(1),
+  mae: z.number().nonnegative(),
+  spearmanRho: z.number().min(-1).max(1),
+  top1Hit: z.boolean(),
+  top3Hit: z.boolean(),
+  perProgramDelta: z.array(
+    z.object({
+      programName: z.string().min(1),
+      predicted: z.number().min(0).max(100),
+      actual: z.number().min(0).max(100),
+      delta: z.number(),
+    }),
+  ).min(1),
+});
+export type EvaluationResult = z.infer<typeof evaluationResultSchema>;
+
 export const labInputSchema = z.object({
   rawInput: z.string().min(10),
   inputType: inputTypeSchema,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 export type LabInput = z.infer<typeof labInputSchema>;
 
@@ -276,7 +334,7 @@ export const persistedLabRunSchema = z.object({
   input: labInputSchema,
   promptSnapshot: z.string().min(10),
   promptSource: promptSourceSchema.optional(),
-  steps: z.array(runStageSchema).length(5),
+  steps: z.array(runStageSchema),
   panelSampleVersion: z.string().optional(),
   panel: z.array(normalizedPersonaSchema).default([]),
   populationMap: populationAssignmentResultSchema.optional(),
@@ -284,6 +342,10 @@ export const persistedLabRunSchema = z.object({
   contextPacks: z.array(contextPackSchema).default([]),
   reactions: z.array(reactionResultSchema).default([]),
   aggregateReport: aggregationResultSchema.optional(),
+  tvSchedule: z.array(tvScheduleItemSchema).default([]),
+  tvViewingChoices: z.array(personaViewingChoiceSchema).default([]),
+  tvPredictions: z.array(predictedAudienceShareSchema).default([]),
+  tvEvaluation: evaluationResultSchema.optional(),
   rawModelDiagnostics: z.array(
     z.object({
       stage: stageIdSchema,
@@ -312,10 +374,21 @@ export const dailyQuestionPreviewSchema = z.discriminatedUnion("status", [
 ]);
 export type DailyQuestionPreview = z.infer<typeof dailyQuestionPreviewSchema>;
 
-export const defaultRunSteps = (): RunStage[] => [
-  { id: "population_mapping", label: "Population mapping", status: "pending", diagnostics: {} },
-  { id: "retrieval", label: "Retrieval", status: "pending", diagnostics: {} },
-  { id: "context_packs", label: "Context packs", status: "pending", diagnostics: {} },
-  { id: "persona_reactions", label: "Persona reactions", status: "pending", diagnostics: {} },
-  { id: "divergence_report", label: "Divergence report", status: "pending", diagnostics: {} },
-];
+export const defaultRunSteps = (mode: RunMode = "manual"): RunStage[] => {
+  if (mode === "tv_audience_daily") {
+    return [
+      { id: "tv_schedule_ingestion", label: "Schedule ingestion", status: "pending", diagnostics: {} },
+      { id: "tv_panel_loading", label: "Panel loading", status: "pending", diagnostics: {} },
+      { id: "tv_preference_elicitation", label: "Preference elicitation", status: "pending", diagnostics: {} },
+      { id: "tv_vote_aggregation", label: "Vote aggregation", status: "pending", diagnostics: {} },
+      { id: "tv_evaluation", label: "Evaluation", status: "pending", diagnostics: {} },
+    ];
+  }
+  return [
+    { id: "population_mapping", label: "Population mapping", status: "pending", diagnostics: {} },
+    { id: "retrieval", label: "Retrieval", status: "pending", diagnostics: {} },
+    { id: "context_packs", label: "Context packs", status: "pending", diagnostics: {} },
+    { id: "persona_reactions", label: "Persona reactions", status: "pending", diagnostics: {} },
+    { id: "divergence_report", label: "Divergence report", status: "pending", diagnostics: {} },
+  ];
+};

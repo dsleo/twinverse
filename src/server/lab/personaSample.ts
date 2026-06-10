@@ -258,6 +258,42 @@ function inferIssueSalienceTags(
   ]);
 }
 
+function inferTvPreferenceDescription(
+  lifeStage: string,
+  householdType: string,
+  employmentClass: string,
+): string {
+  const genrePrefs: Record<string, string> = {
+    young_adult: "contemporary series, action films, variety shows",
+    midcareer: "drama series, thrillers, documentaries",
+    established_adult: "premium dramas, cultural programs, news",
+    retirement_age: "classic films, documentaries, news, light entertainment",
+  };
+
+  const scheduleContext: Record<string, string> = {
+    family_household: "primetime viewing with family, early evening preference",
+    single_adult: "flexible solo viewing, anytime preference",
+    couple_without_children: "evening and late-night viewing, quality-focused",
+    other_household: "flexible group viewing",
+  };
+
+  const timeAvailability: Record<string, string> = {
+    retired: "afternoon and primetime viewing available",
+    executive_professional: "evening-only viewing after work",
+    self_employed: "variable schedule, flexible viewing times",
+    intermediate_professional: "evening primetime viewing",
+    working_class: "evening and weekend viewing",
+    service_employee: "irregular schedule, shift-dependent",
+    out_of_work: "anytime viewing available",
+  };
+
+  const genres = genrePrefs[lifeStage] || "diverse programming";
+  const context = scheduleContext[householdType] || "flexible viewing";
+  const timing = timeAvailability[employmentClass] || "evening viewing";
+
+  return `Likely prefers ${genres}. Watches during ${timing.toLowerCase()}, typically ${context.toLowerCase()}.`;
+}
+
 export function deriveAssignmentMetadata(persona: Omit<NormalizedPersona, "assignmentMetadata">): PersonaAssignmentMetadata {
   const employmentClass = inferEmploymentClass(persona.occupation);
   const lifeStage = inferLifeStage(persona.age);

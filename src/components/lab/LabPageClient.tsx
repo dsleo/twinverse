@@ -71,7 +71,9 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [isPackOpen, setIsPackOpen] = useState(false);
   const [dailyQuestion, setDailyQuestion] = useState<DailyQuestionPreview | null>(null);
+  const [latestTvDate, setLatestTvDate] = useState<{ targetDate: string; reportUrl: string } | null>(null);
   const [isDailyQuestionLoading, setIsDailyQuestionLoading] = useState(fixedMode === "le_figaro_daily" || showModePicker);
+  const [isTvDateLoading, setIsTvDateLoading] = useState(fixedMode === "tv_audience_daily");
 
   const isLeFigaroMode = mode === "le_figaro_daily";
   const isTvMode = mode === "tv_audience_daily";
@@ -132,6 +134,41 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   }, [isLeFigaroMode, showModePicker]);
 
   useEffect(() => {
+    if (!isTvMode) {
+      setIsTvDateLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadLatestTvDate() {
+      setIsTvDateLoading(true);
+      try {
+        const response = await fetch(`/api/lab/tv-latest-date?t=${Date.now()}`, { cache: "no-store" });
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+        setLatestTvDate(data);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error("Failed to load latest TV date:", error);
+      } finally {
+        if (!cancelled) {
+          setIsTvDateLoading(false);
+        }
+      }
+    }
+
+    void loadLatestTvDate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTvMode]);
+
+  useEffect(() => {
     if (!runId) {
       return;
     }
@@ -185,6 +222,8 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
 
     try {
       const isTvMode = mode === "tv_audience_daily";
+      const targetDate = isTvMode ? (latestTvDate?.targetDate ?? "2026-06-09") : undefined;
+
       const response = await fetch("/api/lab/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -192,7 +231,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
           mode,
           rawInput: mode === "manual" ? rawInput : undefined,
           inputType: isTvMode ? "other" : ("question" satisfies InputType),
-          date: isTvMode ? "2026-06-07" : undefined,
+          date: targetDate,
         }),
       });
 
@@ -316,8 +355,17 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <div className="card-topline">
                 <div>
                   <div className="section-label">Target date</div>
-                  <p className="lab-question-date">{formatQuestionDate("2026-06-07")}</p>
+                  {isTvDateLoading ? (
+                    <p className="lab-question-date">Loading...</p>
+                  ) : (
+                    <p className="lab-question-date">{formatQuestionDate(latestTvDate?.targetDate)}</p>
+                  )}
                 </div>
+                {latestTvDate?.reportUrl && (
+                  <a href={latestTvDate.reportUrl} target="_blank" rel="noreferrer" className="text-link" style={{ fontSize: "0.8rem" }}>
+                    Source article
+                  </a>
+                )}
               </div>
               <p className="lab-readonly-question">Simulating evening viewing choice for the 20:00 primetime slot.</p>
             </article>

@@ -17,7 +17,8 @@
       "Bash(pkill -9 -f \"next dev\")",
       "Bash(npm run:*)",
       "Bash(pkill -f \"next dev\")",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(awk '{print NR+45, $0}')"
     ]
   }
 }

@@ -112,6 +112,7 @@ export const normalizedPersonaSchema = z.object({
   concerns: z.array(z.string()),
   profileNarrative: z.string().min(1),
   assignmentMetadata: personaAssignmentMetadataSchema,
+  tvPreferenceDescription: z.string().default(""),
 });
 export type NormalizedPersona = z.infer<typeof normalizedPersonaSchema>;
 

@@ -32,40 +32,51 @@ async function fetchHtml(url: string) {
 }
 
 function cleanText(text: string): string {
+  if (!text) return "";
   return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/\xa0/g, " ")
     .replace(/\u202f/g, " ")
+    .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /**
+ * Clean program name from trailing audience data if leaky.
+ */
+function cleanProgramName(name: string): string {
+  let cleaned = cleanText(name);
+  // Remove patterns like " 1 234 000 téléspectateurs" or " 12,3 %"
+  cleaned = cleaned.replace(/\s\d[\d\s]*téléspectateurs.*$/i, "");
+  cleaned = cleaned.replace(/\s\d+([,.]\d+)?\s*%.*$/i, "");
+  return cleaned.trim();
+}
+
+/**
  * Scrapes the TV schedule and actual results from a Figaro audience report article.
- * Implementation based on Python scraper logic.
  */
 async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> {
-  console.log(`[scraper] Fetching report content from: ${url}`);
   const html = await fetchHtml(url);
   const schedule: TVScheduleItem[] = [];
 
-  console.log(`[scraper] HTML length: ${html.length} characters`);
-
-  // Try Pattern 1: Table parsing (Standard Figaro format)
-  // Pattern: <td class="fig-tv-audience__program-title">...</td>
+  // Pattern 1: Table parsing
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
 
   while ((rowMatch = rowRegex.exec(html)) !== null) {
     const rowHtml = rowMatch[1];
-    
-    // Look for program title and audience info
     const programMatch = rowHtml.match(/class=["']fig-tv-audience__program-title["'][^>]*>([\s\S]*?)<\/td>/i);
-    const audienceMatch = rowHtml.match(/class=["']fig-tv-audience__spectateur["'][^>]*>([\s\S]*?)<\/td>/i);
     const pdaMatch = rowHtml.match(/class=["']fig-tv-audience__audience["'][^>]*>([\s\S]*?)<\/td>/i);
     
-    if (programMatch && audienceMatch) {
-      const programName = cleanText(programMatch[1].replace(/<[^>]+>/g, ""));
-      const shareStr = pdaMatch ? cleanText(pdaMatch[1].replace(/<[^>]+>/g, "")).replace('%', '').replace(',', '.').trim() : "";
+    if (programMatch) {
+      const programName = cleanProgramName(programMatch[1]);
+      const shareStr = pdaMatch ? cleanText(pdaMatch[1]).replace('%', '').replace(',', '.').trim() : "";
       const actualShare = parseFloat(shareStr) || undefined;
       
       let channel = "";
@@ -79,7 +90,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       }
       
       if (!channel) {
-        const rowText = cleanText(rowHtml.replace(/<[^>]+>/g, " "));
+        const rowText = cleanText(rowHtml);
         for (const hint of CHANNEL_HINTS) {
           if (new RegExp(`\\b${hint}\\b`, 'i').test(rowText)) {
             channel = hint;
@@ -101,24 +112,18 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
     }
   }
 
-  console.log(`[scraper] Pattern 1 (Table) found ${schedule.length} items`);
-
-  // Try Pattern 2: Text extraction (Fallback for older or variant formats)
+  // Pattern 2: Text List Fallback
   if (schedule.length === 0) {
-    // Look for "1. [Program] ([Channel]) : [Viewers] ([Share])" in paragraphs or list items
     const listRegex = /(?:<p[^>]*>|<li>)(\d+)\.\s+([^<]+)(?:<\/p>|<\/li>)/gi;
     let listMatch;
-    
     while ((listMatch = listRegex.exec(html)) !== null) {
       const line = cleanText(listMatch[2]);
-      // Pattern: Program Name (Channel) : 1 234 000 téléspectateurs (12,3 %)
       const parts = line.match(/^(.+?)\s*\(([^)]+)\)\s*[:]\s*(.+?)\s+téléspectateurs\s*\((.+?)\s*%\)$/i);
-      
       if (parts) {
         const [_, programName, channel, viewers, shareStr] = parts;
         schedule.push({
           channel: cleanText(channel),
-          programName: cleanText(programName),
+          programName: cleanProgramName(programName),
           genre: "Prime",
           timeSlot: "20:00",
           durationMinutes: 120,
@@ -126,29 +131,11 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         });
       }
     }
-    console.log(`[scraper] Pattern 2 (Text List) found ${schedule.length} items`);
-  }
-
-  // Try Pattern 3: Generic channel-program mapping (Last resort)
-  if (schedule.length === 0) {
-    for (const channel of CHANNEL_HINTS) {
-      const genericRegex = new RegExp(`${channel}\\s+[-:]\\s+([^<.(]+)`, 'i');
-      const match = html.match(genericRegex);
-      if (match) {
-        schedule.push({
-          channel,
-          programName: cleanText(match[1]),
-          genre: "Prime",
-          timeSlot: "20:00",
-          durationMinutes: 120,
-        });
-      }
-    }
-    console.log(`[scraper] Pattern 3 (Generic) found ${schedule.length} items`);
   }
 
   return schedule;
 }
+
 
 export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: string; reportUrl: string; schedule: TVScheduleItem[] }> {
   try {

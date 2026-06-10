@@ -98,10 +98,17 @@ export async function buildViewingPreferencesForSegment(
     "Each response must include the matching personaId from the input.",
     "Probabilities must sum to exactly 1.0.",
     "CRITICAL: You must provide a clear 'rationale' for your choices *before* assigning probabilities.",
+    "PROBABILITY CALIBRATION: Most viewers have ONE preferred program per time slot (top choice: 20-30%). Secondary choices are significantly lower (second: 8-15%). Remaining programs split minimally (rest: 1-5% each). Avoid uniform distributions. Use 1-2% for programs they would only watch if others aren't available.",
   ].join(" ");
 
   const scheduleText = scheduleWithIndex
-    .map(({ index, item }) => `[${index}] ${item.channel} — ${item.programName} (${item.genre}) — ${item.timeSlot}`)
+    .map(({ index, item }) => {
+      const flags = [];
+      if (item.isFootballMatch) flags.push("FOOTBALL_MATCH");
+      if (item.isHoliday) flags.push("HOLIDAY");
+      const flagStr = flags.length > 0 ? ` [${flags.join(", ")}]` : "";
+      return `[${index}] ${item.channel} — ${item.programName} (${item.genre}) — ${item.timeSlot}${flagStr}`;
+    })
     .join("\n");
 
   // Extract just program names for clear reference in response
@@ -122,7 +129,7 @@ export async function buildViewingPreferencesForSegment(
         concerns: persona.concerns,
         profileNarrative: persona.profileNarrative,
       })),
-      instruction: `For each program in the schedule, first provide a 'rationale' explaining the persona's thought process for their viewing preferences tonight, considering their traits and concerns. Then, assign a probability (0.0–1.0) for each program reflecting how likely they are to watch it. All probabilities must sum to exactly 1.0. Use the exact program names from the programNames list above.`,
+      instruction: `For each program in the schedule, first provide a 'rationale' explaining the persona's thought process for their viewing preferences tonight, considering their traits, concerns, and the program's genre, channel, and any special context (football matches, holiday programming). Then, assign a probability (0.0–1.0) for each program reflecting how likely they are to watch it. All probabilities must sum to exactly 1.0. Use the exact program names from the programNames list above.`,
       responseExample: `{
   "choices": [
     {

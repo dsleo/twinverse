@@ -220,10 +220,14 @@ export async function executeTvAudienceRun(runId: string) {
 
     const viewingChoices: typeof currentRun.tvViewingChoices = [];
     const failedSegments: number[] = [];
+    const segmentDiagnostics: any[] = [];
 
     segmentResults.forEach((result, i) => {
       if (result.status === "fulfilled") {
         viewingChoices.push(...result.value.choices);
+        if (result.value.diagnostics) {
+          segmentDiagnostics.push(result.value.diagnostics);
+        }
       } else {
         failedSegments.push(i);
         console.warn(`[tv-pipeline] Segment ${i} failed: ${result.reason}`);
@@ -248,7 +252,7 @@ export async function executeTvAudienceRun(runId: string) {
 
     setStageStatus("tv_preference_elicitation", "completed", {
       summary: `Elicited viewing preferences from ${viewingChoices.length} personas.`,
-      diagnostics,
+      diagnostics: segmentDiagnostics,
     });
     await persistRun();
 

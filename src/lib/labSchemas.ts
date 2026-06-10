@@ -130,6 +130,8 @@ export const tvScheduleItemSchema = z.object({
   genre: z.string().min(1),
   timeSlot: z.string().min(1),
   durationMinutes: z.number().int().positive().nullable(),
+  isFootballMatch: z.boolean().default(false),
+  isHoliday: z.boolean().default(false),
 });
 export type TVScheduleItem = z.infer<typeof tvScheduleItemSchema>;
 

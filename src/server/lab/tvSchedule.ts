@@ -84,7 +84,7 @@ function parseCSVLine(line: string): string[] {
 /**
  * Parse the backtest CSV and extract safe schedule items for a given date.
  * Strips all leaky columns (Audience, Part d'audience, Position, Feature, Concurrence, Réseaux sociaux, etc.)
- * Only exposes: channel, programName, genre, timeSlot, durationMinutes
+ * Only exposes: channel, programName, genre, timeSlot, durationMinutes, isFootballMatch, isHoliday
  */
 export function parseBacktestSchedule(date: string): TVScheduleItem[] {
   const csvPath = resolve(process.cwd(), "data/tv-audience/audiences_figaro_2_weeks.csv");
@@ -99,6 +99,8 @@ export function parseBacktestSchedule(date: string): TVScheduleItem[] {
   const schedule: TVScheduleItem[] = dateRows.map((row) => {
     const durationStr = row["Durée"]?.trim();
     const durationMinutes = durationStr ? parseInt(durationStr, 10) : null;
+    const isFootballMatch = row["Présence d'un match de foot"]?.trim().toLowerCase() === "oui";
+    const isHoliday = row["Jour férié"]?.trim().toLowerCase() === "oui";
 
     return {
       channel: row["Chaîne"].trim(),
@@ -106,6 +108,8 @@ export function parseBacktestSchedule(date: string): TVScheduleItem[] {
       genre: row["Genre"].trim(),
       timeSlot: row["Heure"].trim(),
       durationMinutes: isNaN(durationMinutes || NaN) ? null : durationMinutes,
+      isFootballMatch,
+      isHoliday,
     };
   });
 

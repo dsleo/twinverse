@@ -371,10 +371,22 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               {latestTvDate?.schedule && latestTvDate.schedule.length > 0 ? (
                 <ul className="lab-schedule-list" style={{ marginTop: "1rem", listStyle: "none", padding: 0, fontSize: "0.9rem" }}>
                   {latestTvDate.schedule.slice(0, 10).map((item, i) => (
-                    <li key={i} style={{ marginBottom: "0.5rem", display: "flex", gap: "0.5rem", borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.2rem' }}>
-                      <span style={{ fontWeight: "bold", minWidth: "90px", opacity: 0.9 }}>{item.channel}</span>
+                    <li key={i} style={{ marginBottom: "0.5rem", display: "flex", alignItems: 'center', gap: "0.8rem", borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.4rem' }}>
+                      <div style={{ minWidth: "90px", display: 'flex', alignItems: 'center' }}>
+                        {item.channelLogoUrl ? (
+                          <img 
+                            src={item.channelLogoUrl} 
+                            alt={item.channel} 
+                            style={{ height: '1.2rem', maxWidth: '80px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} 
+                          />
+                        ) : (
+                          <span style={{ fontWeight: "bold", opacity: 0.9 }}>{item.channel}</span>
+                        )}
+                      </div>
                       <span style={{ opacity: 1 }}>{item.programName}</span>
-                      <span style={{ fontStyle: "italic", marginLeft: "auto", fontSize: "0.8rem", opacity: 0.6 }}>({item.genre})</span>
+                      {item.genre && (
+                        <span style={{ fontStyle: "italic", marginLeft: "auto", fontSize: "0.8rem", opacity: 0.6 }}>({item.genre})</span>
+                      )}
                     </li>
                   ))}
                   {latestTvDate.schedule.length > 10 && <li style={{ fontSize: "0.8rem", opacity: 0.5, marginTop: '0.5rem' }}>+ {latestTvDate.schedule.length - 10} other programs in schedule</li>}

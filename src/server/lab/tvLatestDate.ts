@@ -80,13 +80,20 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       const actualShare = parseFloat(shareStr) || undefined;
       
       let channel = "";
+      let channelLogoUrl = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
-      const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
+      const channelImgMatch = rowHtml.match(/<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["']/i);
       
       if (channelTitleMatch) {
         channel = cleanText(channelTitleMatch[1]).replace("Programme TV ", "");
-      } else if (channelAltMatch) {
-        channel = cleanText(channelAltMatch[1]).replace("Programme TV ", "");
+      }
+      
+      if (channelImgMatch) {
+        const src = channelImgMatch[1];
+        channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
+        if (!channel) {
+          channel = cleanText(channelImgMatch[2]).replace("Programme TV ", "");
+        }
       }
       
       if (!channel) {
@@ -103,10 +110,11 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         schedule.push({
           channel,
           programName,
-          genre: "Prime",
+          genre: "", // Remove "Prime"
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare,
+          channelLogoUrl: channelLogoUrl || undefined,
         });
       }
     }

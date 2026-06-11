@@ -13,7 +13,31 @@ const CHANNEL_HINTS = [
   "L'Équipe", "L'Equipe", "NRJ 12", "Chérie 25"
 ];
 
-const CHANNEL_LOGOS: Record<string, string> = {
+function getChannelLogo(channelName: string): string | undefined {
+  if (!channelName) return undefined;
+
+  const normalized = channelName.trim().toLowerCase();
+
+  // Direct match first
+  for (const [key, url] of Object.entries(CHANNEL_LOGOS_MAP)) {
+    if (key.toLowerCase() === normalized) return url;
+  }
+
+  // Fuzzy match for common variations
+  if (normalized.includes("tf1")) return CHANNEL_LOGOS_MAP["TF1"];
+  if (normalized.includes("france 2")) return CHANNEL_LOGOS_MAP["France 2"];
+  if (normalized.includes("france 3")) return CHANNEL_LOGOS_MAP["France 3"];
+  if (normalized.includes("france 4")) return CHANNEL_LOGOS_MAP["France 4"];
+  if (normalized.includes("france 5")) return CHANNEL_LOGOS_MAP["France 5"];
+  if (normalized.includes("m6")) return CHANNEL_LOGOS_MAP["M6"];
+  if (normalized.includes("canal")) return CHANNEL_LOGOS_MAP["Canal+"];
+  if (normalized.includes("arte")) return CHANNEL_LOGOS_MAP["Arte"];
+  if (normalized.includes("bfm")) return CHANNEL_LOGOS_MAP["BFM TV"];
+
+  return undefined;
+}
+
+const CHANNEL_LOGOS_MAP: Record<string, string> = {
   "TF1": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/TF1_logo_2013.svg/200px-TF1_logo_2013.svg.png",
   "France 2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/France_2_logo_2021.svg/200px-France_2_logo_2021.svg.png",
   "France 3": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/France_3_logo_2021.svg/200px-France_3_logo_2021.svg.png",
@@ -138,7 +162,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare,
-          channelLogoUrl: CHANNEL_LOGOS[channel],
+          channelLogoUrl: getChannelLogo(channel),
           isFootballMatch: false,
           isHoliday: false,
         });
@@ -163,7 +187,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare: parseFloat(shareStr.replace(',', '.')) || undefined,
-          channelLogoUrl: CHANNEL_LOGOS[cleanChannel],
+          channelLogoUrl: getChannelLogo(cleanChannel),
           isFootballMatch: false,
           isHoliday: false,
         });

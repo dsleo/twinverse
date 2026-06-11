@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buildAggregation } from "./aggregation";
-import { buildContextPack } from "./contextPacks";
+import { buildContextPacks } from "./contextPacks";
 import { logLabRun, logLabStage } from "./logging";
 import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
@@ -159,28 +159,35 @@ export async function executeLabRun(runId: string) {
     const panel = currentRun.panel;
 
     setStageStatus("context_packs", "running", {
-      summary: "Writing one context pack per derived segment.",
+      summary: "Writing one batched context pack response for all derived segments.",
     });
     await persistRun();
 
     const preferredSources = retrievalState.sources.filter((source) => source.provenance === "live").slice(0, 4);
     const sourcesForPrompts = preferredSources.length > 0 ? preferredSources : retrievalState.sources.slice(0, 4);
-    const contextPackResults = await Promise.all(
-      populationMap.segments.map(async (segment) => {
-        const personas = panel.filter((persona) => segment.representativePersonaIds.includes(persona.id));
-        return buildContextPack(currentRun!.input, segment, personas, sourcesForPrompts, { runId });
-      }),
+    const personasBySegment = new Map(
+      populationMap.segments.map((segment) => [
+        segment.id,
+        panel.filter((persona) => segment.representativePersonaIds.includes(persona.id)),
+      ]),
+    );
+    const contextPackResults = await buildContextPacks(
+      currentRun!.input,
+      populationMap.segments,
+      personasBySegment,
+      sourcesForPrompts,
+      { runId },
     );
     currentRun = {
       ...currentRun,
-      contextPacks: contextPackResults.map((result) => result.pack),
+      contextPacks: contextPackResults.packs,
       rawModelDiagnostics: [
         ...currentRun.rawModelDiagnostics,
-        ...contextPackResults.map((result) => ({ stage: "context_packs" as const, ...result.diagnostics })),
+        { stage: "context_packs", ...contextPackResults.diagnostics },
       ],
     };
     setStageStatus("context_packs", "completed", {
-      summary: `Built ${contextPackResults.length} structured context packs.`,
+      summary: `Built ${contextPackResults.packs.length} structured context packs in one model call.`,
     });
     await persistRun();
 

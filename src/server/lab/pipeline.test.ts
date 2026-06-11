@@ -96,8 +96,8 @@ vi.mock("./retrieval", () => ({
 }));
 
 vi.mock("./contextPacks", () => ({
-  buildContextPack: vi.fn(async (_input, segment) => ({
-    pack: {
+  buildContextPacks: vi.fn(async (_input, segments) => ({
+    packs: segments.map((segment: { id: string; label: string }) => ({
       id: `context-pack-${segment.id}`,
       segmentId: segment.id,
       label: segment.label,
@@ -108,8 +108,8 @@ vi.mock("./contextPacks", () => ({
       practicalImplications: ["Practical implication"],
       rationale: "Rationale",
       supportingSourceIds: ["source-1"],
-    },
-    diagnostics: { name: "ContextPackBuilderAgent", model: "test", outputText: "{}" },
+    })),
+    diagnostics: { name: "ContextPackBuilderAgentBatch", model: "test", outputText: "{}" },
   })),
 }));
 
@@ -256,6 +256,7 @@ describe("executeLabRun", () => {
                   traits: ["pragmatic"],
                   concerns: ["cost of living"],
                   profileNarrative: "Profile",
+                  tvPreferenceDescription: "",
                   assignmentMetadata: {
                     life_stage: "midcareer",
                     household_type: "family_household",

@@ -82,25 +82,18 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       let channel = "";
       let channelLogoUrl = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
-      const channelImgMatch = rowHtml.match(/<img[^>]*class=["']fig-channel[^"]*["'][^>]*>/i);
+      const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
+      const logoMatch = rowHtml.match(/class=["']fig-channel-logo["'][^>]*src=["']([^"']+)["']/i);
+
+      if (logoMatch) {
+        const src = logoMatch[1];
+        channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
+      }
 
       if (channelTitleMatch) {
         channel = cleanText(channelTitleMatch[1]).replace("Programme TV ", "");
-      }
-
-      if (channelImgMatch) {
-        const imgTag = channelImgMatch[0];
-        const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
-        const altMatch = imgTag.match(/alt=["']([^"']+)["']/i);
-
-        if (srcMatch) {
-          const src = srcMatch[1];
-          channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
-        }
-
-        if (!channel && altMatch) {
-          channel = cleanText(altMatch[1]).replace("Programme TV ", "");
-        }
+      } else if (channelAltMatch) {
+        channel = cleanText(channelAltMatch[1]).replace("Programme TV ", "");
       }
       
       if (!channel) {
@@ -117,7 +110,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         schedule.push({
           channel,
           programName,
-          genre: "", // Remove "Prime"
+          genre: "Prime",
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare,
@@ -141,30 +134,10 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         schedule.push({
           channel: cleanText(channel),
           programName: cleanProgramName(programName),
-          genre: "",
+          genre: "Prime",
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare: parseFloat(shareStr.replace(',', '.')) || undefined,
-          isFootballMatch: false,
-          isHoliday: false,
-        });
-      }
-    }
-  }
-
-  // Pattern 3: Generic channel-program mapping (Last resort)
-  if (schedule.length === 0) {
-    for (const channel of CHANNEL_HINTS) {
-      // Look for "[Channel] - [Program]" or "[Channel] : [Program]"
-      const genericRegex = new RegExp(`${channel}\\s+[-:]\\s+([^<.(]+)`, 'i');
-      const match = html.match(genericRegex);
-      if (match) {
-        schedule.push({
-          channel,
-          programName: cleanText(match[1]),
-          genre: "",
-          timeSlot: "20:00",
-          durationMinutes: 120,
           isFootballMatch: false,
           isHoliday: false,
         });
@@ -179,10 +152,10 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
 export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: string; reportUrl: string; schedule: TVScheduleItem[] }> {
   try {
     const indexHtml = await fetchHtml(FIGARO_AUDIENCES_URL);
-
+    
     // Pattern to find audience report links
     const matches = [...indexHtml.matchAll(/href=["']([^"']+\-(\d{8}))["']/gi)];
-
+    
     if (matches.length === 0) {
       throw new Error("No TV audience reports found on Le Figaro page.");
     }
@@ -190,12 +163,12 @@ export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: strin
     // Take the first match (most recent)
     const [_, url, dateString] = matches[0];
     const reportUrl = url.startsWith('http') ? url : `https://tvmag.lefigaro.fr${url}`;
-
+    
     // Parse YYYYMMDD
     const year = dateString.substring(0, 4);
     const month = dateString.substring(4, 6);
     const day = dateString.substring(6, 8);
-
+    
     // Report on date N covers audience for date N-1
     const publishDate = new Date(`${year}-${month}-${day}T12:00:00Z`);
     const targetDateObj = new Date(publishDate.getTime() - 24 * 60 * 60 * 1000);
@@ -204,17 +177,6 @@ export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: strin
     // Scrape the schedule directly from the article
     const schedule = await scrapeScheduleFromReport(reportUrl);
 
-    // If scraping returned no data, fallback to CSV
-    if (schedule.length === 0) {
-      console.warn("[tvLatestDate] Scraper returned empty schedule, using CSV fallback");
-      const { parseBacktestSchedule } = await import("./tvSchedule");
-      return {
-        targetDate,
-        reportUrl,
-        schedule: parseBacktestSchedule(targetDate)
-      };
-    }
-
     return {
       targetDate,
       reportUrl,
@@ -222,14 +184,14 @@ export async function resolveLatestTvAudienceDate(): Promise<{ targetDate: strin
     };
   } catch (error) {
     console.error("[tvLatestDate] Scraper failed:", error);
-
+    
     // Fallback to latest CSV if scraping fails completely
     const { parseBacktestSchedule } = await import("./tvSchedule");
     const csvPath = resolve(process.cwd(), "data/tv-audience/audiences_figaro_2_weeks.csv");
     const csvContent = readFileSync(csvPath, "utf-8");
     const dates = csvContent.split("\n").slice(1).map(line => line.split(",")[0]).filter(Boolean);
     const latestDate = [...new Set(dates)].sort().pop() || "2026-06-07";
-
+    
     return {
       targetDate: latestDate,
       reportUrl: FIGARO_AUDIENCES_URL,

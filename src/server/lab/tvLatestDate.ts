@@ -13,6 +13,37 @@ const CHANNEL_HINTS = [
   "L'Équipe", "L'Equipe", "NRJ 12", "Chérie 25"
 ];
 
+const CHANNEL_LOGOS: Record<string, string> = {
+  "TF1": "https://www.tf1.fr/favicon.ico",
+  "France 2": "https://www.france.tv/favicon.ico",
+  "France 3": "https://www.france.tv/favicon.ico",
+  "France 4": "https://www.france.tv/favicon.ico",
+  "France 5": "https://www.france.tv/favicon.ico",
+  "M6": "https://www.m6.fr/favicon.ico",
+  "Canal+": "https://www.canalplus.com/favicon.ico",
+  "Canal +": "https://www.canalplus.com/favicon.ico",
+  "Arte": "https://www.arte.tv/favicon.ico",
+  "TMC": "https://www.tmc.tv/favicon.ico",
+  "TFX": "https://www.tfx.fr/favicon.ico",
+  "TF1 Séries Films": "https://www.tf1.fr/favicon.ico",
+  "W9": "https://www.w9.fr/favicon.ico",
+  "6ter": "https://www.6ter.fr/favicon.ico",
+  "Gulli": "https://www.gulli.fr/favicon.ico",
+  "C8": "https://www.c8.fr/favicon.ico",
+  "CStar": "https://www.cstar.canalplus.com/favicon.ico",
+  "CSTAR": "https://www.cstar.canalplus.com/favicon.ico",
+  "RMC Découverte": "https://www.rmc.fr/favicon.ico",
+  "RMC Story": "https://www.rmc.fr/favicon.ico",
+  "BFM TV": "https://www.bfmtv.com/favicon.ico",
+  "LCI": "https://www.lci.fr/favicon.ico",
+  "CNews": "https://www.cnewsmatin.fr/favicon.ico",
+  "Franceinfo": "https://www.francetvinfo.fr/favicon.ico",
+  "L'Équipe": "https://www.lequipe.fr/favicon.ico",
+  "L'Equipe": "https://www.lequipe.fr/favicon.ico",
+  "NRJ 12": "https://www.nrj12.fr/favicon.ico",
+  "Chérie 25": "https://www.cherie25.fr/favicon.ico"
+};
+
 async function fetchHtml(url: string) {
   const response = await fetch(url, {
     headers: {
@@ -80,15 +111,8 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       const actualShare = parseFloat(shareStr) || undefined;
       
       let channel = "";
-      let channelLogoUrl = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
       const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
-      const logoMatch = rowHtml.match(/<img[^>]*src=["']([^"']+)["']/i);
-
-      if (logoMatch) {
-        const src = logoMatch[1];
-        channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
-      }
 
       if (channelTitleMatch) {
         channel = cleanText(channelTitleMatch[1]).replace("Programme TV ", "");
@@ -114,7 +138,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare,
-          channelLogoUrl: channelLogoUrl || undefined,
+          channelLogoUrl: CHANNEL_LOGOS[channel],
           isFootballMatch: false,
           isHoliday: false,
         });
@@ -131,13 +155,15 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       const parts = line.match(/^(.+?)\s*\(([^)]+)\)\s*[:]\s*(.+?)\s+téléspectateurs\s*\((.+?)\s*%\)$/i);
       if (parts) {
         const [_, programName, channel, viewers, shareStr] = parts;
+        const cleanChannel = cleanText(channel);
         schedule.push({
-          channel: cleanText(channel),
+          channel: cleanChannel,
           programName: cleanProgramName(programName),
           genre: "",
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare: parseFloat(shareStr.replace(',', '.')) || undefined,
+          channelLogoUrl: CHANNEL_LOGOS[cleanChannel],
           isFootballMatch: false,
           isHoliday: false,
         });

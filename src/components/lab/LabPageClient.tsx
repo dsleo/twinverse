@@ -353,43 +353,39 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
           ) : isTvMode ? (
             <article className="lab-readonly-prompt">
               <div className="card-topline">
-                <div>
-                  <div className="section-label">Target date</div>
-                  {isTvDateLoading ? (
-                    <p className="lab-question-date">Loading...</p>
-                  ) : (
-                    <p className="lab-question-date">{formatQuestionDate(latestTvDate?.targetDate)}</p>
-                  )}
-                </div>
+                <div className="section-label">{isTvDateLoading ? "Loading..." : formatQuestionDate(latestTvDate?.targetDate)}</div>
                 {latestTvDate?.reportUrl && (
                   <a href={latestTvDate.reportUrl} target="_blank" rel="noreferrer" className="text-link" style={{ fontSize: "0.8rem" }}>
                     Source article
                   </a>
                 )}
               </div>
-              <p className="lab-readonly-question">Simulating primetime viewing choice:</p>
               {latestTvDate?.schedule && latestTvDate.schedule.length > 0 ? (
-                <ul className="lab-schedule-list" style={{ marginTop: "1rem", listStyle: "none", padding: 0, fontSize: "0.9rem" }}>
+                <ul className="lab-schedule-grid">
                   {latestTvDate.schedule.slice(0, 10).map((item, i) => (
-                    <li key={i} style={{ marginBottom: "0.5rem", display: "flex", alignItems: 'center', gap: "0.8rem", borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.4rem' }}>
-                      <div style={{ minWidth: "90px", display: 'flex', alignItems: 'center' }}>
+                    <li key={i} className="lab-schedule-item">
+                      <div className="lab-schedule-channel">
                         {item.channelLogoUrl ? (
                           <img
                             src={item.channelLogoUrl}
                             alt={item.channel}
-                            style={{ height: '1.2rem', maxWidth: '80px', objectFit: 'contain' }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              height: "2.1rem",
+                              objectFit: "contain",
+                            }}
                           />
                         ) : (
                           <span style={{ fontWeight: "bold", opacity: 0.9 }}>{item.channel}</span>
                         )}
                       </div>
-                      <span style={{ opacity: 1 }}>{item.programName}</span>
-                      {item.genre && (
-                        <span style={{ fontStyle: "italic", marginLeft: "auto", fontSize: "0.8rem", opacity: 0.6 }}>({item.genre})</span>
-                      )}
+                      <div className="lab-schedule-copy">
+                        <span className="lab-schedule-program">{item.programName}</span>
+                      </div>
+                      <div className="lab-schedule-genre">{item.genre ?? ""}</div>
                     </li>
                   ))}
-                  {latestTvDate.schedule.length > 10 && <li style={{ fontSize: "0.8rem", opacity: 0.5, marginTop: '0.5rem' }}>+ {latestTvDate.schedule.length - 10} other programs in schedule</li>}
                 </ul>
               ) : isTvDateLoading ? null : (
                 <p style={{ marginTop: "1rem", fontSize: "0.9rem", opacity: 0.6 }}>No schedule data available for this date.</p>

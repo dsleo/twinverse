@@ -3,6 +3,7 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { TVScheduleItem } from "../../lib/labSchemas";
+import { getChannelLogoUrl } from "./channelLogo";
 
 const FIGARO_AUDIENCES_URL = "https://tvmag.lefigaro.fr/programme-tv/audiences-tv/";
 
@@ -12,61 +13,6 @@ const CHANNEL_HINTS = [
   "CSTAR", "RMC Découverte", "RMC Story", "BFM TV", "LCI", "CNews", "Franceinfo",
   "L'Équipe", "L'Equipe", "NRJ 12", "Chérie 25"
 ];
-
-function getChannelLogo(channelName: string): string | undefined {
-  if (!channelName) return undefined;
-
-  const normalized = channelName.trim().toLowerCase();
-
-  // Direct match first
-  for (const [key, url] of Object.entries(CHANNEL_LOGOS_MAP)) {
-    if (key.toLowerCase() === normalized) return url;
-  }
-
-  // Fuzzy match for common variations
-  if (normalized.includes("tf1")) return CHANNEL_LOGOS_MAP["TF1"];
-  if (normalized.includes("france 2")) return CHANNEL_LOGOS_MAP["France 2"];
-  if (normalized.includes("france 3")) return CHANNEL_LOGOS_MAP["France 3"];
-  if (normalized.includes("france 4")) return CHANNEL_LOGOS_MAP["France 4"];
-  if (normalized.includes("france 5")) return CHANNEL_LOGOS_MAP["France 5"];
-  if (normalized.includes("m6")) return CHANNEL_LOGOS_MAP["M6"];
-  if (normalized.includes("canal")) return CHANNEL_LOGOS_MAP["Canal+"];
-  if (normalized.includes("arte")) return CHANNEL_LOGOS_MAP["Arte"];
-  if (normalized.includes("bfm")) return CHANNEL_LOGOS_MAP["BFM TV"];
-
-  return undefined;
-}
-
-const CHANNEL_LOGOS_MAP: Record<string, string> = {
-  "TF1": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/TF1_logo_2013.svg/200px-TF1_logo_2013.svg.png",
-  "France 2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/France_2_logo_2021.svg/200px-France_2_logo_2021.svg.png",
-  "France 3": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/France_3_logo_2021.svg/200px-France_3_logo_2021.svg.png",
-  "France 4": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/France_4_logo_2022.svg/200px-France_4_logo_2022.svg.png",
-  "France 5": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/France_5_logo_2021.svg/200px-France_5_logo_2021.svg.png",
-  "M6": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/M6_%28TV_channel%29_logo_2014.svg/200px-M6_%28TV_channel%29_logo_2014.svg.png",
-  "Canal+": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Canal%2B_logo_2012.svg/200px-Canal%2B_logo_2012.svg.png",
-  "Canal +": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Canal%2B_logo_2012.svg/200px-Canal%2B_logo_2012.svg.png",
-  "Arte": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/ARTElogo.svg/200px-ARTElogo.svg.png",
-  "TMC": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/TMC_%28TV_channel%29_logo_2014.svg/200px-TMC_%28TV_channel%29_logo_2014.svg.png",
-  "TFX": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/TFX_logo_2015.svg/200px-TFX_logo_2015.svg.png",
-  "TF1 Séries Films": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/TF1_logo_2013.svg/200px-TF1_logo_2013.svg.png",
-  "W9": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/W9_logo_2020.svg/200px-W9_logo_2020.svg.png",
-  "6ter": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/6ter_logo.svg/200px-6ter_logo.svg.png",
-  "Gulli": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Gulli_logo_2013.svg/200px-Gulli_logo_2013.svg.png",
-  "C8": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/C8_logo_2022.svg/200px-C8_logo_2022.svg.png",
-  "CStar": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/CStar_logo.svg/200px-CStar_logo.svg.png",
-  "CSTAR": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/CStar_logo.svg/200px-CStar_logo.svg.png",
-  "RMC Découverte": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/RMC_D%C3%A9couverte_logo.svg/200px-RMC_D%C3%A9couverte_logo.svg.png",
-  "RMC Story": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/RMC_Story_logo_2022.svg/200px-RMC_Story_logo_2022.svg.png",
-  "BFM TV": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/BFM_TV_logo_2019.svg/200px-BFM_TV_logo_2019.svg.png",
-  "LCI": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/LCI_logo_2015.svg/200px-LCI_logo_2015.svg.png",
-  "CNews": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Cnews_logo.svg/200px-Cnews_logo.svg.png",
-  "Franceinfo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Franceinfo_logo_2017.svg/200px-Franceinfo_logo_2017.svg.png",
-  "L'Équipe": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/L%27%C3%89quipe_logo.svg/200px-L%27%C3%89quipe_logo.svg.png",
-  "L'Equipe": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/L%27%C3%89quipe_logo.svg/200px-L%27%C3%89quipe_logo.svg.png",
-  "NRJ 12": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/NRJ_12_logo_2020.svg/200px-NRJ_12_logo_2020.svg.png",
-  "Chérie 25": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Ch%C3%A9rie_25_logo.svg/200px-Ch%C3%A9rie_25_logo.svg.png"
-};
 
 async function fetchHtml(url: string) {
   const response = await fetch(url, {
@@ -162,7 +108,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare,
-          channelLogoUrl: getChannelLogo(channel),
+          channelLogoUrl: getChannelLogoUrl(channel),
           isFootballMatch: false,
           isHoliday: false,
         });
@@ -187,7 +133,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare: parseFloat(shareStr.replace(',', '.')) || undefined,
-          channelLogoUrl: getChannelLogo(cleanChannel),
+          channelLogoUrl: getChannelLogoUrl(cleanChannel),
           isFootballMatch: false,
           isHoliday: false,
         });

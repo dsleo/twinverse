@@ -19,7 +19,9 @@
       "Bash(pkill -f \"next dev\")",
       "Bash(python3:*)",
       "Bash(awk '{print NR+45, $0}')",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(curl -s http://localhost:3007/api/lab/tv-latest-date)",
+      "Bash(pkill -f \"next dev\" sleep 2 npm run dev)"
     ]
   }
 }

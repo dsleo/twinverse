@@ -83,7 +83,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       let channelLogoUrl = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
       const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
-      const logoMatch = rowHtml.match(/class=["']fig-channel-logo["'][^>]*src=["']([^"']+)["']/i);
+      const logoMatch = rowHtml.match(/<img[^>]*src=["']([^"']+)["']/i);
 
       if (logoMatch) {
         const src = logoMatch[1];
@@ -110,7 +110,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         schedule.push({
           channel,
           programName,
-          genre: "Prime",
+          genre: "",
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare,
@@ -134,7 +134,7 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
         schedule.push({
           channel: cleanText(channel),
           programName: cleanProgramName(programName),
-          genre: "Prime",
+          genre: "",
           timeSlot: "20:00",
           durationMinutes: 120,
           actualShare: parseFloat(shareStr.replace(',', '.')) || undefined,

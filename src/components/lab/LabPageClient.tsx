@@ -374,10 +374,10 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                     <li key={i} style={{ marginBottom: "0.5rem", display: "flex", alignItems: 'center', gap: "0.8rem", borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.4rem' }}>
                       <div style={{ minWidth: "90px", display: 'flex', alignItems: 'center' }}>
                         {item.channelLogoUrl ? (
-                          <img 
-                            src={item.channelLogoUrl} 
-                            alt={item.channel} 
-                            style={{ height: '1.2rem', maxWidth: '80px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} 
+                          <img
+                            src={item.channelLogoUrl}
+                            alt={item.channel}
+                            style={{ height: '1.2rem', maxWidth: '80px', objectFit: 'contain' }}
                           />
                         ) : (
                           <span style={{ fontWeight: "bold", opacity: 0.9 }}>{item.channel}</span>

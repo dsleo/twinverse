@@ -82,20 +82,25 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
       let channel = "";
       let channelLogoUrl = "";
       const channelTitleMatch = rowHtml.match(/class=["']fig-channel-media["'][^>]*title=["']([^"']+)["']/i);
-      const channelSrcMatch = rowHtml.match(/<img[^>]*src=["']([^"']+)["']/i);
-      const channelAltMatch = rowHtml.match(/<img[^>]*alt=["']([^"']+)["']/i);
+      const channelImgMatch = rowHtml.match(/<img[^>]*class=["']fig-channel[^"]*["'][^>]*>/i);
 
       if (channelTitleMatch) {
         channel = cleanText(channelTitleMatch[1]).replace("Programme TV ", "");
       }
 
-      if (channelSrcMatch) {
-        const src = channelSrcMatch[1];
-        channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
-      }
+      if (channelImgMatch) {
+        const imgTag = channelImgMatch[0];
+        const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
+        const altMatch = imgTag.match(/alt=["']([^"']+)["']/i);
 
-      if (!channel && channelAltMatch) {
-        channel = cleanText(channelAltMatch[1]).replace("Programme TV ", "");
+        if (srcMatch) {
+          const src = srcMatch[1];
+          channelLogoUrl = src.startsWith('http') ? src : `https:${src}`;
+        }
+
+        if (!channel && altMatch) {
+          channel = cleanText(altMatch[1]).replace("Programme TV ", "");
+        }
       }
       
       if (!channel) {

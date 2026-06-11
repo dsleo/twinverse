@@ -39,6 +39,20 @@ const weights: Record<AudiencePreset, Partial<Record<WeightedFamily, Record<stri
       institution_reliant: 2,
     },
   },
+  france_tv_viewer: {
+    life_stage: {
+      retirement_age: 4,
+      established_adult: 3,
+      midcareer: 1,
+    },
+    urbanicity: {
+      small_town_rural: 2,
+      secondary_urban: 1,
+    },
+    household_type: {
+      family_household: 2,
+    },
+  },
 };
 
 export function audiencePresetDescription(audiencePreset: AudiencePreset) {

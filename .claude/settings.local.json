@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_claude-mem_mcp-search__smart_outline",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "mcp__plugin_claude-mem_mcp-search__smart_unfold",
+      "mcp__plugin_claude-mem_mcp-search__smart_search",
+      "Bash(gh api:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(tsx:*)",
+      "Bash(curl -X POST http://localhost:3000/api/lab/batch-eval -H 'Content-Type: application/json')",
+      "Bash(netstat -tuln)",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/monitor-batch.sh)",
+      "Bash(nohup bash:*)",
+      "Bash(pkill -9 -f \"next dev\")",
+      "Bash(npm run:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(python3:*)",
+      "Bash(awk '{print NR+45, $0}')",
+      "Bash(git checkout:*)",
+      "Bash(curl -s http://localhost:3007/api/lab/tv-latest-date)",
+      "Bash(pkill -f \"next dev\" sleep 2 npm run dev)"
+    ]
+  }
+}

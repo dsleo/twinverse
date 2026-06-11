@@ -17,6 +17,9 @@ export default function Page() {
             <Link href="/lab/figaro" className="ghost-button home-cta">
               Question du jour
             </Link>
+            <Link href="/lab/tv" className="ghost-button home-cta">
+              TV Audience
+            </Link>
             <Link href="/personas" className="ghost-button home-cta">
               View Personas
             </Link>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
+import { TvAudienceResult } from "./TvAudienceResult";
 import { runModeLabels } from "../../lib/labAudience";
 import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
 
@@ -70,14 +71,20 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [isPackOpen, setIsPackOpen] = useState(false);
   const [dailyQuestion, setDailyQuestion] = useState<DailyQuestionPreview | null>(null);
+  const [latestTvDate, setLatestTvDate] = useState<{ targetDate: string; reportUrl: string; schedule?: any[] } | null>(null);
   const [isDailyQuestionLoading, setIsDailyQuestionLoading] = useState(fixedMode === "le_figaro_daily" || showModePicker);
+  const [isTvDateLoading, setIsTvDateLoading] = useState(fixedMode === "tv_audience_daily");
 
   const isLeFigaroMode = mode === "le_figaro_daily";
-  const heroTitle = isLeFigaroMode && !showModePicker ? "Le Figaro, as it lands." : "Ask. See how it lands.";
+  const isTvMode = mode === "tv_audience_daily";
+
+  const heroTitle = isLeFigaroMode && !showModePicker ? "Le Figaro, as it lands." : isTvMode ? "TV Audience Prediction" : "Ask. See how it lands.";
   const heroLede =
     isLeFigaroMode && !showModePicker
       ? ""
-      : "An agentic system combines live context with tailored synthetic personas to simulate audience reaction.";
+      : isTvMode
+        ? "Simulate how French audiences choose their evening programs based on persona traits and schedule context."
+        : "An agentic system combines live context with tailored synthetic personas to simulate audience reaction.";
 
   useEffect(() => {
     if (fixedMode) {
@@ -125,6 +132,41 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
       cancelled = true;
     };
   }, [isLeFigaroMode, showModePicker]);
+
+  useEffect(() => {
+    if (!isTvMode) {
+      setIsTvDateLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadLatestTvDate() {
+      setIsTvDateLoading(true);
+      try {
+        const response = await fetch(`/api/lab/tv-latest-date?t=${Date.now()}`, { cache: "no-store" });
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+        setLatestTvDate(data);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error("Failed to load latest TV date:", error);
+      } finally {
+        if (!cancelled) {
+          setIsTvDateLoading(false);
+        }
+      }
+    }
+
+    void loadLatestTvDate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTvMode]);
 
   useEffect(() => {
     if (!runId) {
@@ -179,13 +221,17 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
     setIsPackOpen(false);
 
     try {
+      const isTvMode = mode === "tv_audience_daily";
+      const targetDate = isTvMode ? (latestTvDate?.targetDate ?? "2026-06-09") : undefined;
+
       const response = await fetch("/api/lab/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           mode,
           rawInput: mode === "manual" ? rawInput : undefined,
-          inputType: "question" satisfies InputType,
+          inputType: isTvMode ? "other" : ("question" satisfies InputType),
+          date: targetDate,
         }),
       });
 
@@ -246,7 +292,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const isRunActive = run?.status === "running";
   const submitDisabled =
     isRunActive ||
-    (mode === "manual" ? rawInput.trim().length < 10 : isDailyQuestionLoading || !leFigaroAvailable);
+    (mode === "manual" ? rawInput.trim().length < 10 : mode === "le_figaro_daily" ? isDailyQuestionLoading || !leFigaroAvailable : false);
 
   return (
     <div className="lab-page page-shell">
@@ -303,6 +349,47 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               </div>
 
               {leFigaroAvailable ? <p className="lab-readonly-question">{dailyQuestion.question}</p> : <p>{dailyQuestion?.message ?? "Loading today’s Le Figaro question."}</p>}
+            </article>
+          ) : isTvMode ? (
+            <article className="lab-readonly-prompt">
+              <div className="card-topline">
+                <div className="section-label">{isTvDateLoading ? "Loading..." : formatQuestionDate(latestTvDate?.targetDate)}</div>
+                {latestTvDate?.reportUrl && (
+                  <a href={latestTvDate.reportUrl} target="_blank" rel="noreferrer" className="text-link" style={{ fontSize: "0.8rem" }}>
+                    Source article
+                  </a>
+                )}
+              </div>
+              {latestTvDate?.schedule && latestTvDate.schedule.length > 0 ? (
+                <ul className="lab-schedule-grid">
+                  {latestTvDate.schedule.slice(0, 10).map((item, i) => (
+                    <li key={i} className="lab-schedule-item">
+                      <div className="lab-schedule-channel">
+                        {item.channelLogoUrl ? (
+                          <img
+                            src={item.channelLogoUrl}
+                            alt={item.channel}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              height: "2.1rem",
+                              objectFit: "contain",
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontWeight: "bold", opacity: 0.9 }}>{item.channel}</span>
+                        )}
+                      </div>
+                      <div className="lab-schedule-copy">
+                        <span className="lab-schedule-program">{item.programName}</span>
+                      </div>
+                      <div className="lab-schedule-genre">{item.genre ?? ""}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : isTvDateLoading ? null : (
+                <p style={{ marginTop: "1rem", fontSize: "0.9rem", opacity: 0.6 }}>No schedule data available for this date.</p>
+              )}
             </article>
           ) : (
             <textarea
@@ -531,6 +618,18 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             ))}
           </ul>
           <p className="lab-warning">{run.aggregateReport.caveats.join(" ")}</p>
+        </section>
+      ) : null}
+
+      {run?.tvPredictions && run.tvPredictions.length > 0 ? (
+        <section id="tv-predictions" className="lab-card">
+          <div className="section-heading section-heading-compact">
+            <div>
+              <div className="section-label">TV audience predictions</div>
+              <h2>Predicted vs. actual market share</h2>
+            </div>
+          </div>
+          <TvAudienceResult run={run} />
         </section>
       ) : null}
 

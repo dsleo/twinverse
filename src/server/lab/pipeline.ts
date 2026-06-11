@@ -7,6 +7,7 @@ import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
 import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
+import { executeTvAudienceRun } from "./tvPipeline";
 import { type AudiencePreset, labInputSchema, type LabInput, type PersistedLabRun, type PromptSource, type RunMode, type StageId } from "../../lib/labSchemas";
 
 type SettledTask<T> =
@@ -44,6 +45,12 @@ export async function createLabRun({
 }
 
 export async function executeLabRun(runId: string) {
+  // Delegate to TV pipeline for TV audience prediction runs
+  const run = await readRun(runId);
+  if (run.mode === "tv_audience_daily") {
+    return executeTvAudienceRun(runId);
+  }
+
   let currentRun: PersistedLabRun | null = null;
 
   const persistRun = async () => {

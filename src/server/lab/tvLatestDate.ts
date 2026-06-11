@@ -152,6 +152,26 @@ async function scrapeScheduleFromReport(url: string): Promise<TVScheduleItem[]> 
     }
   }
 
+  // Pattern 3: Generic channel-program mapping (Last resort)
+  if (schedule.length === 0) {
+    for (const channel of CHANNEL_HINTS) {
+      // Look for "[Channel] - [Program]" or "[Channel] : [Program]"
+      const genericRegex = new RegExp(`${channel}\\s+[-:]\\s+([^<.(]+)`, 'i');
+      const match = html.match(genericRegex);
+      if (match) {
+        schedule.push({
+          channel,
+          programName: cleanText(match[1]),
+          genre: "",
+          timeSlot: "20:00",
+          durationMinutes: 120,
+          isFootballMatch: false,
+          isHoliday: false,
+        });
+      }
+    }
+  }
+
   return schedule;
 }
 

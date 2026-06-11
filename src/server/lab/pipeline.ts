@@ -2,6 +2,7 @@ import "server-only";
 
 import { buildAggregation } from "./aggregation";
 import { buildContextPack } from "./contextPacks";
+import { logLabRun, logLabStage } from "./logging";
 import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
@@ -51,6 +52,11 @@ export async function executeLabRun(runId: string) {
     return executeTvAudienceRun(runId);
   }
 
+  logLabRun(runId, "run-start", {
+    mode: run.mode,
+    audiencePreset: run.audiencePreset,
+  });
+
   let currentRun: PersistedLabRun | null = null;
 
   const persistRun = async () => {
@@ -88,6 +94,12 @@ export async function executeLabRun(runId: string) {
           : step,
       ),
     };
+
+    logLabStage(runId, stageId, status, {
+      summary: options?.summary,
+      error: options?.error,
+      ...options?.diagnostics,
+    });
   };
 
   try {
@@ -105,7 +117,7 @@ export async function executeLabRun(runId: string) {
     await persistRun();
 
     const cache = await loadPersonaSample();
-    const mapped = await mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset);
+    const mapped = await mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset, { runId });
     currentRun = {
       ...currentRun,
       panelSampleVersion: cache.sampleVersion,
@@ -156,7 +168,7 @@ export async function executeLabRun(runId: string) {
     const contextPackResults = await Promise.all(
       populationMap.segments.map(async (segment) => {
         const personas = panel.filter((persona) => segment.representativePersonaIds.includes(persona.id));
-        return buildContextPack(currentRun!.input, segment, personas, sourcesForPrompts);
+        return buildContextPack(currentRun!.input, segment, personas, sourcesForPrompts, { runId });
       }),
     );
     currentRun = {
@@ -190,7 +202,7 @@ export async function executeLabRun(runId: string) {
         if (!contextPack) {
           throw new Error(`Reaction context pack missing for ${segment.id}.`);
         }
-        return buildReactionsForSegment(currentRun!.input, segment, personas, contextPack, sourcesForPrompts);
+        return buildReactionsForSegment(currentRun!.input, segment, personas, contextPack, sourcesForPrompts, { runId });
       }),
     );
     currentRun = {
@@ -220,6 +232,7 @@ export async function executeLabRun(runId: string) {
       currentRun.contextPacks,
       currentRun.reactions,
       retrievalState.sources,
+      { runId },
     );
     currentRun = {
       ...currentRun,
@@ -232,6 +245,11 @@ export async function executeLabRun(runId: string) {
       summary: "Final divergence report is ready.",
     });
     await persistRun();
+    logLabRun(runId, "run-complete", {
+      status: "completed",
+      reactions: currentRun.reactions.length,
+      contextPacks: currentRun.contextPacks.length,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
@@ -257,6 +275,9 @@ export async function executeLabRun(runId: string) {
         ),
       };
       await persistRun();
+      logLabRun(runId, "run-failed", {
+        error: message,
+      });
     } else {
       throw error;
     }

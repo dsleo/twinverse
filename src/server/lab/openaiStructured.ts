@@ -3,6 +3,7 @@ import "server-only";
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import type { ZodType } from "zod";
+import { logLabRun } from "./logging";
 
 type StructuredCallParams<T> = {
   schema: ZodType<T>;
@@ -11,6 +12,8 @@ type StructuredCallParams<T> = {
   user: string;
   stageName: string;
   maxRetries?: number;
+  runId?: string;
+  traceLabel?: string;
 };
 
 export type StructuredCallResult<T> = {
@@ -68,6 +71,8 @@ export async function callStructuredModel<T>({
   user,
   stageName,
   maxRetries = 2,
+  runId,
+  traceLabel,
 }: StructuredCallParams<T>): Promise<StructuredCallResult<T>> {
   const client = getClient();
   const model = getModel();
@@ -75,6 +80,14 @@ export async function callStructuredModel<T>({
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
+      logLabRun(runId ?? "model", "llm-request-start", {
+        stage: stageName,
+        label: traceLabel,
+        model,
+        attempt: attempt + 1,
+        maxAttempts: maxRetries + 1,
+      });
+
       const completion = await client.chat.completions.parse({
         model,
         messages: [
@@ -89,6 +102,14 @@ export async function callStructuredModel<T>({
         throw new Error(`${stageName} returned no structured payload.`);
       }
 
+      logLabRun(runId ?? "model", "llm-request-complete", {
+        stage: stageName,
+        label: traceLabel,
+        model,
+        responseId: completion.id,
+        attempt: attempt + 1,
+      });
+
       return {
         data: message.parsed,
         diagnostics: {
@@ -100,8 +121,21 @@ export async function callStructuredModel<T>({
       };
     } catch (error) {
       lastError = error;
+      logLabRun(runId ?? "model", "llm-request-failed", {
+        stage: stageName,
+        label: traceLabel,
+        model,
+        attempt: attempt + 1,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
+  logLabRun(runId ?? "model", "llm-request-aborted", {
+    stage: stageName,
+    label: traceLabel,
+    model,
+    attempts: maxRetries + 1,
+  });
   throw lastError instanceof Error ? lastError : new Error(`${stageName} failed after retries.`);
 }

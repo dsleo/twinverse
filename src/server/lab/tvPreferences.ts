@@ -7,6 +7,7 @@ import {
   type NormalizedPersona,
   type TVScheduleItem,
 } from "../../lib/labSchemas";
+import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
 
 /**
@@ -83,7 +84,16 @@ export async function buildViewingPreferencesForSegment(
   segment: AssignedSegment,
   personas: NormalizedPersona[],
   schedule: TVScheduleItem[],
+  options?: { runId?: string },
 ) {
+  if (options?.runId) {
+    logLabRun(options.runId, "tv-preferences-build", {
+      segment: segment.id,
+      personas: personas.length,
+      scheduleItems: schedule.length,
+    });
+  }
+
   // Build indexed schedule for the prompt
   const scheduleWithIndex = schedule.map((item, idx) => ({
     index: idx,
@@ -155,6 +165,8 @@ export async function buildViewingPreferencesForSegment(
     stageName: "ViewingPreferenceAgentBatch",
     system,
     user,
+    runId: options?.runId,
+    traceLabel: `tv_preferences:${segment.id}`,
   });
 
   const personaIds = new Set(personas.map((persona) => persona.id));

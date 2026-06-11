@@ -1,9 +1,25 @@
 import "server-only";
 
 import { aggregationResultSchema, type AssignedSegment, type ContextPack, type LabInput, type ReactionResult, type RetrievedSource } from "../../lib/labSchemas";
+import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
 
-export async function buildAggregation(input: LabInput, segments: AssignedSegment[], contextPacks: ContextPack[], reactions: ReactionResult[], sources: RetrievedSource[]) {
+export async function buildAggregation(
+  input: LabInput,
+  segments: AssignedSegment[],
+  contextPacks: ContextPack[],
+  reactions: ReactionResult[],
+  sources: RetrievedSource[],
+  options?: { runId?: string },
+) {
+  if (options?.runId) {
+    logLabRun(options.runId, "aggregation-build", {
+      segments: segments.length,
+      reactions: reactions.length,
+      sources: sources.length,
+    });
+  }
+
   const system = [
     "You aggregate persona-level reactions into a concise divergence report.",
     "Speak only about the evaluated personas. Do not imply that unevaluated personas were directly simulated.",
@@ -46,6 +62,8 @@ export async function buildAggregation(input: LabInput, segments: AssignedSegmen
     stageName: "AggregatorAgent",
     system,
     user,
+    runId: options?.runId,
+    traceLabel: "aggregation_report",
   });
 
   return {

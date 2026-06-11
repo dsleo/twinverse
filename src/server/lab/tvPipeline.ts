@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createRunRecord, readRun, writeRun } from "./persistence";
+import { logLabRun, logLabStage } from "./logging";
 import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
 import { parseBacktestSchedule } from "./tvSchedule";
@@ -44,6 +45,9 @@ export async function createTvAudienceRun({
  */
 export async function executeTvAudienceRun(runId: string) {
   let currentRun: PersistedLabRun | null = null;
+  logLabRun(runId, "run-start", {
+    mode: "tv_audience_daily",
+  });
 
   const persistRun = async () => {
     if (!currentRun) {
@@ -84,6 +88,12 @@ export async function executeTvAudienceRun(runId: string) {
           : step,
       ),
     };
+
+    logLabStage(runId, stageId, status, {
+      summary: options?.summary,
+      error: options?.error,
+      ...options?.diagnostics,
+    });
   };
 
   try {
@@ -142,6 +152,7 @@ export async function executeTvAudienceRun(runId: string) {
         { rawInput: "French evening TV viewer", inputType: "poll_question" },
         cache,
         "france_tv_viewer",
+        { runId },
       );
 
       panel = mapped.panel;
@@ -202,6 +213,7 @@ export async function executeTvAudienceRun(runId: string) {
       },
       panel,
       schedule,
+      { runId },
     );
 
     const viewingChoices = result.choices;
@@ -277,6 +289,11 @@ export async function executeTvAudienceRun(runId: string) {
       status: "completed",
     };
     await persistRun();
+    logLabRun(runId, "run-complete", {
+      status: "completed",
+      viewingChoices: viewingChoices.length,
+      predictions: predictions.length,
+    });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[tv-pipeline] Execution failed for ${runId}:`, error);
@@ -293,6 +310,9 @@ export async function executeTvAudienceRun(runId: string) {
         error: errorMsg,
       };
       await persistRun();
+      logLabRun(runId, "run-failed", {
+        error: errorMsg,
+      });
     }
 
     throw error;

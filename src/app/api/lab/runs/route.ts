@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 import { inputTypeSchema, runModeSchema } from "../../../../lib/labSchemas";
 import { resolveLeFigaroDailyQuestion } from "../../../../server/lab/dailyQuestion";
+import { logLabRun } from "../../../../server/lab/logging";
 import { createLabRun, executeLabRun } from "../../../../server/lab/pipeline";
 import { createTvAudienceRun } from "../../../../server/lab/tvPipeline";
 import { listRuns } from "../../../../server/lab/persistence";
@@ -102,9 +103,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create run." }, { status: 500 });
   }
 
+  logLabRun(run.id, "run-created", {
+    mode,
+    audiencePreset: run.audiencePreset,
+  });
+
   after(async () => {
     try {
+      logLabRun(run.id, "background-execution-start");
       await executeLabRun(run.id);
+      logLabRun(run.id, "background-execution-finished");
     } catch (error) {
       console.error(`[lab:runs] Background execution failed for ${run.id}`, error);
     }

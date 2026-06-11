@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { reactionResultSchema, type AssignedSegment, type ContextPack, type LabInput, type NormalizedPersona, type RetrievedSource } from "../../lib/labSchemas";
+import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
 
 const reactionOutputSchema = reactionResultSchema.omit({
@@ -25,7 +26,16 @@ export async function buildReactionsForSegment(
   personas: NormalizedPersona[],
   contextPack: ContextPack,
   sources: RetrievedSource[],
+  options?: { runId?: string },
 ) {
+  if (options?.runId) {
+    logLabRun(options.runId, "reaction-batch-build", {
+      segment: segment.id,
+      personas: personas.length,
+      sources: sources.length,
+    });
+  }
+
   const system = [
     "You simulate French personas' reactions to a public prompt.",
     "Use only the supplied persona profiles, segment framing, context pack, and sources.",
@@ -72,6 +82,8 @@ export async function buildReactionsForSegment(
     stageName: "ReactionAgentBatch",
     system,
     user,
+    runId: options?.runId,
+    traceLabel: `reactions:${segment.id}`,
   });
 
   const personaIds = new Set(personas.map((persona) => persona.id));

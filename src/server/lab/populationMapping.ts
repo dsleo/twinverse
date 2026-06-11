@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
 import { audiencePresetAffinityScore, audiencePresetDescription } from "./audiencePresets";
 import { metadataTaxonomy } from "./personaSample";
@@ -313,8 +314,20 @@ function choosePanel(scoredBySegment: Array<{ segment: PopulationSegmentSpec; ca
   return Array.from(selected.values()).slice(0, 20);
 }
 
-export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache, audiencePreset: AudiencePreset = "france_general") {
+export async function mapPopulationToPanel(
+  input: LabInput,
+  cache: PersonaCache,
+  audiencePreset: AudiencePreset = "france_general",
+  options?: { runId?: string },
+) {
   const audience = audiencePresetSchema.parse(audiencePreset);
+  if (options?.runId) {
+    logLabRun(options.runId, "population-mapping-start", {
+      audience: audiencePreset,
+      sampleSize: cache.sampleSize,
+    });
+  }
+
   const taxonomy = metadataTaxonomy(cache.personas);
   const promptDimensionList = promptDimensions(input.rawInput);
   const system = [
@@ -362,6 +375,8 @@ export async function mapPopulationToPanel(input: LabInput, cache: PersonaCache,
     stageName: "PopulationMapperAgent",
     system,
     user,
+    runId: options?.runId,
+    traceLabel: "population_mapping",
   });
 
   const frequencies = buildMetadataValueFrequencies(cache.personas);

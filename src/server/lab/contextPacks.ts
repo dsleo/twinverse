@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
 import {
   contextPackSchema,
@@ -17,7 +18,21 @@ const contextPackOutputSchema = contextPackSchema.omit({
   supportingSourceIds: true,
 });
 
-export async function buildContextPack(input: LabInput, segment: AssignedSegment, personas: NormalizedPersona[], sources: RetrievedSource[]) {
+export async function buildContextPack(
+  input: LabInput,
+  segment: AssignedSegment,
+  personas: NormalizedPersona[],
+  sources: RetrievedSource[],
+  options?: { runId?: string },
+) {
+  if (options?.runId) {
+    logLabRun(options.runId, "context-pack-build", {
+      segment: segment.id,
+      personas: personas.length,
+      sources: sources.length,
+    });
+  }
+
   const system = [
     "You build compact context packs for a French synthetic-audience simulation.",
     "Return a concise segment briefing grounded only in the supplied prompt, personas, and sources.",
@@ -59,6 +74,8 @@ export async function buildContextPack(input: LabInput, segment: AssignedSegment
     stageName: "ContextPackBuilderAgent",
     system,
     user,
+    runId: options?.runId,
+    traceLabel: `context_pack:${segment.id}`,
   });
 
   const pack = contextPackSchema.parse({

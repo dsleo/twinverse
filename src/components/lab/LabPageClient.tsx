@@ -188,7 +188,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         if (nextRun.status === "completed" || nextRun.status === "failed") {
           return;
         }
-        window.setTimeout(poll, 1000);
+        window.setTimeout(poll, 2500);
       } catch (nextError) {
         if (!cancelled) {
           setError(nextError instanceof Error ? nextError.message : "Unable to refresh the run.");

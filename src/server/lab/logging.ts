@@ -23,3 +23,18 @@ export function logLabStage(
 ) {
   console.log(`[lab:${runId}] stage=${stageId} status=${status}${formatDetails(details)}`);
 }
+
+export function logLabTokenTotals(
+  runId: string,
+  label: string,
+  totals: {
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    estimatedCalls: number;
+  },
+  task?: string,
+) {
+  console.log(`[lab:${runId}] ${label}${formatDetails({ task, ...totals })}`);
+}

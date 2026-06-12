@@ -1,12 +1,13 @@
 import "server-only";
 
 import { createRunRecord, readRun, writeRun } from "./persistence";
-import { logLabRun, logLabStage } from "./logging";
+import { logLabRun, logLabStage, logLabTokenTotals } from "./logging";
 import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
 import { parseBacktestSchedule } from "./tvSchedule";
 import { buildViewingPreferencesForSegment } from "./tvPreferences";
 import { aggregateViewingChoices, evaluateAgainstActual } from "./tvAggregation";
+import { addTokenUsage, createTokenTotals } from "./tokenAccounting";
 import type { AudiencePreset, LabInput, NormalizedPersona, PersistedLabRun, RunMode, StageId } from "../../lib/labSchemas";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
@@ -45,6 +46,8 @@ export async function createTvAudienceRun({
  */
 export async function executeTvAudienceRun(runId: string) {
   let currentRun: PersistedLabRun | null = null;
+  const taskName = "tv audience";
+  const tokenTotals = createTokenTotals();
   logLabRun(runId, "run-start", {
     mode: "tv_audience_daily",
   });
@@ -154,6 +157,7 @@ export async function executeTvAudienceRun(runId: string) {
         "france_tv_viewer",
         { runId },
       );
+      addTokenUsage(tokenTotals, mapped.tokenUsage);
 
       panel = mapped.panel;
 
@@ -215,6 +219,7 @@ export async function executeTvAudienceRun(runId: string) {
       schedule,
       { runId },
     );
+    addTokenUsage(tokenTotals, result.tokenUsage);
 
     const viewingChoices = result.choices;
 
@@ -294,6 +299,13 @@ export async function executeTvAudienceRun(runId: string) {
       viewingChoices: viewingChoices.length,
       predictions: predictions.length,
     });
+    logLabTokenTotals(runId, "run-token-summary", {
+      calls: tokenTotals.calls,
+      inputTokens: tokenTotals.inputTokens,
+      outputTokens: tokenTotals.outputTokens,
+      totalTokens: tokenTotals.totalTokens,
+      estimatedCalls: tokenTotals.estimatedCalls,
+    }, taskName);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[tv-pipeline] Execution failed for ${runId}:`, error);
@@ -313,6 +325,13 @@ export async function executeTvAudienceRun(runId: string) {
       logLabRun(runId, "run-failed", {
         error: errorMsg,
       });
+      logLabTokenTotals(runId, "run-token-summary", {
+        calls: tokenTotals.calls,
+        inputTokens: tokenTotals.inputTokens,
+        outputTokens: tokenTotals.outputTokens,
+        totalTokens: tokenTotals.totalTokens,
+        estimatedCalls: tokenTotals.estimatedCalls,
+      }, taskName);
     }
 
     throw error;

@@ -1,8 +1,25 @@
 import "server-only";
 
+import { z } from "zod";
 import { aggregationResultSchema, type AssignedSegment, type ContextPack, type LabInput, type ReactionResult, type RetrievedSource } from "../../lib/labSchemas";
 import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
+import { type TokenUsage } from "./tokenAccounting";
+
+export type AggregationResult = {
+  report: z.infer<typeof aggregationResultSchema>;
+  diagnostics: {
+    name: string;
+    model: string;
+    responseId?: string;
+    outputText: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    tokenUsageEstimated: boolean;
+  };
+  tokenUsage: TokenUsage;
+};
 
 export async function buildAggregation(
   input: LabInput,
@@ -11,7 +28,7 @@ export async function buildAggregation(
   reactions: ReactionResult[],
   sources: RetrievedSource[],
   options?: { runId?: string },
-) {
+): Promise<AggregationResult> {
   if (options?.runId) {
     logLabRun(options.runId, "aggregation-build", {
       segments: segments.length,
@@ -69,5 +86,6 @@ export async function buildAggregation(
   return {
     report: aggregationResultSchema.parse(result.data),
     diagnostics: result.diagnostics,
+    tokenUsage: result.tokenUsage,
   };
 }

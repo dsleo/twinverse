@@ -9,6 +9,7 @@ import {
 } from "../../lib/labSchemas";
 import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
+import { type TokenUsage } from "./tokenAccounting";
 
 /**
  * Normalize probability scores to sum to exactly 1.0
@@ -80,12 +81,27 @@ const batchedViewingChoiceSchema = z.object({
   ).min(1),
 });
 
+export type TVPreferenceBatchResult = {
+  choices: z.infer<typeof personaViewingChoiceSchema>[];
+  diagnostics: {
+    name: string;
+    model: string;
+    responseId?: string;
+    outputText: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    tokenUsageEstimated: boolean;
+  };
+  tokenUsage: TokenUsage;
+};
+
 export async function buildViewingPreferencesForSegment(
   segment: AssignedSegment,
   personas: NormalizedPersona[],
   schedule: TVScheduleItem[],
   options?: { runId?: string },
-) {
+): Promise<TVPreferenceBatchResult> {
   if (options?.runId) {
     logLabRun(options.runId, "tv-preferences-build", {
       segment: segment.id,
@@ -230,5 +246,6 @@ export async function buildViewingPreferencesForSegment(
   return {
     choices,
     diagnostics: result.diagnostics,
+    tokenUsage: result.tokenUsage,
   };
 }

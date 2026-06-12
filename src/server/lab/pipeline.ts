@@ -2,13 +2,14 @@ import "server-only";
 
 import { buildAggregation } from "./aggregation";
 import { buildContextPacks } from "./contextPacks";
-import { logLabRun, logLabStage } from "./logging";
+import { logLabRun, logLabStage, logLabTokenTotals } from "./logging";
 import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
 import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
 import { executeTvAudienceRun } from "./tvPipeline";
+import { addTokenUsage, createTokenTotals } from "./tokenAccounting";
 import { type AudiencePreset, labInputSchema, type LabInput, type PersistedLabRun, type PromptSource, type RunMode, type StageId } from "../../lib/labSchemas";
 
 type SettledTask<T> =
@@ -52,6 +53,8 @@ export async function executeLabRun(runId: string) {
     return executeTvAudienceRun(runId);
   }
 
+  const taskName = run.mode === "le_figaro_daily" ? "figaro" : "lab custom";
+  const tokenTotals = createTokenTotals();
   logLabRun(runId, "run-start", {
     mode: run.mode,
     audiencePreset: run.audiencePreset,
@@ -118,6 +121,7 @@ export async function executeLabRun(runId: string) {
 
     const cache = await loadPersonaSample();
     const mapped = await mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset, { runId });
+    addTokenUsage(tokenTotals, mapped.tokenUsage);
     currentRun = {
       ...currentRun,
       panelSampleVersion: cache.sampleVersion,
@@ -178,6 +182,7 @@ export async function executeLabRun(runId: string) {
       sourcesForPrompts,
       { runId },
     );
+    addTokenUsage(tokenTotals, contextPackResults.tokenUsage);
     currentRun = {
       ...currentRun,
       contextPacks: contextPackResults.packs,
@@ -212,6 +217,9 @@ export async function executeLabRun(runId: string) {
         return buildReactionsForSegment(currentRun!.input, segment, personas, contextPack, sourcesForPrompts, { runId });
       }),
     );
+    for (const result of reactionResults) {
+      addTokenUsage(tokenTotals, result.tokenUsage);
+    }
     currentRun = {
       ...currentRun,
       reactions: reactionResults.flatMap((result) => result.reactions),
@@ -241,6 +249,7 @@ export async function executeLabRun(runId: string) {
       retrievalState.sources,
       { runId },
     );
+    addTokenUsage(tokenTotals, aggregation.tokenUsage);
     currentRun = {
       ...currentRun,
       status: "completed",
@@ -257,6 +266,13 @@ export async function executeLabRun(runId: string) {
       reactions: currentRun.reactions.length,
       contextPacks: currentRun.contextPacks.length,
     });
+    logLabTokenTotals(runId, "run-token-summary", {
+      calls: tokenTotals.calls,
+      inputTokens: tokenTotals.inputTokens,
+      outputTokens: tokenTotals.outputTokens,
+      totalTokens: tokenTotals.totalTokens,
+      estimatedCalls: tokenTotals.estimatedCalls,
+    }, taskName);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
@@ -285,6 +301,13 @@ export async function executeLabRun(runId: string) {
       logLabRun(runId, "run-failed", {
         error: message,
       });
+      logLabTokenTotals(runId, "run-token-summary", {
+        calls: tokenTotals.calls,
+        inputTokens: tokenTotals.inputTokens,
+        outputTokens: tokenTotals.outputTokens,
+        totalTokens: tokenTotals.totalTokens,
+        estimatedCalls: tokenTotals.estimatedCalls,
+      }, taskName);
     } else {
       throw error;
     }

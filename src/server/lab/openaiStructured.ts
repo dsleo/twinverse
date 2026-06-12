@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import type { ZodType } from "zod";
 import { logLabRun } from "./logging";
+import { normalizeTokenUsage, type TokenUsage } from "./tokenAccounting";
 
 type StructuredCallParams<T> = {
   schema: ZodType<T>;
@@ -23,7 +24,12 @@ export type StructuredCallResult<T> = {
     model: string;
     responseId?: string;
     outputText: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    tokenUsageEstimated: boolean;
   };
+  tokenUsage: TokenUsage;
 };
 
 let cachedClient: OpenAI | null = null;
@@ -102,21 +108,32 @@ export async function callStructuredModel<T>({
         throw new Error(`${stageName} returned no structured payload.`);
       }
 
+      const tokenUsage = normalizeTokenUsage(completion.usage, system, user, extractOutputText(message.content) || JSON.stringify(message.parsed));
+
       logLabRun(runId ?? "model", "llm-request-complete", {
         stage: stageName,
         label: traceLabel,
         model,
         responseId: completion.id,
         attempt: attempt + 1,
+        inputTokens: tokenUsage.inputTokens,
+        outputTokens: tokenUsage.outputTokens,
+        totalTokens: tokenUsage.totalTokens,
+        tokenUsageEstimated: tokenUsage.estimated,
       });
 
       return {
         data: message.parsed,
+        tokenUsage,
         diagnostics: {
           name: stageName,
           model,
           responseId: completion.id,
           outputText: extractOutputText(message.content) || JSON.stringify(message.parsed),
+          inputTokens: tokenUsage.inputTokens,
+          outputTokens: tokenUsage.outputTokens,
+          totalTokens: tokenUsage.totalTokens,
+          tokenUsageEstimated: tokenUsage.estimated,
         },
       };
     } catch (error) {

@@ -21,7 +21,7 @@ const LAB_STORY_SCENES: StoryScene[] = [
     title: "One question enters the lab",
     body: "The system starts from a single public question and prepares one orchestrated analysis pass.",
     takeaway: "Nothing is simulated yet. The prompt is the only object in play.",
-    targetId: "lab-story",
+    targetId: "lab-command",
   },
   {
     id: "split",
@@ -29,7 +29,7 @@ const LAB_STORY_SCENES: StoryScene[] = [
     title: "Two engines start at once",
     body: "The prompt immediately branches into audience segmentation and live information retrieval.",
     takeaway: "Population structure and evidence gathering run in parallel, not one after the other.",
-    targetId: "lab-story",
+    targetId: "lab-diagnostics",
   },
   {
     id: "mapping",
@@ -191,6 +191,7 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
   const branchPopulationStep = stepsById.get("population_mapping");
   const branchRetrievalStep = stepsById.get("retrieval");
   const activeScene = LAB_STORY_SCENES.find((scene) => scene.id === activeSceneId) ?? LAB_STORY_SCENES[0];
+  const divergenceRows = run.aggregateReport?.mainDivergences ?? [];
 
   return (
     <section id="lab-story" className="lab-story-shell">
@@ -372,6 +373,15 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                       </article>
                     ))}
                   </div>
+                  {divergenceRows.length ? (
+                    <div className="lab-story-divergence-list" aria-label="Main divergences">
+                      {divergenceRows.map((item) => (
+                        <span key={item.title} className="lab-story-mini-pill">
+                          {item.title}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </section>
             </div>
@@ -418,6 +428,59 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                   </div>
                 ) : null}
               </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="lab-story-mobile-stack" aria-label="Story stages">
+          {LAB_STORY_SCENES.map((scene) => (
+            <article key={scene.id} className={`lab-story-mobile-card ${activeSceneId === scene.id ? "active" : ""}`}>
+              <div className="lab-story-mobile-topline">
+                <span className={`lab-story-panel-status lab-story-status-${sceneStatuses[scene.id]}`} />
+                <div>
+                  <div className="lab-story-panel-kicker">{scene.kicker}</div>
+                  <h3>{scene.title}</h3>
+                </div>
+              </div>
+              <p>{scene.body}</p>
+              {scene.id === "question" ? (
+                <div className="lab-story-mobile-preview">
+                  <span className="lab-story-mini-pill">Question intake</span>
+                  <span className="lab-story-mini-pill">Single prompt</span>
+                  <span className="lab-story-mini-pill">Start analysis cue</span>
+                </div>
+              ) : null}
+              {scene.id === "split" ? (
+                <div className="lab-story-mobile-preview">
+                  <span className="lab-story-mini-pill">Segmentation</span>
+                  <span className="lab-story-mini-pill">Retrieval</span>
+                  <span className="lab-story-mini-pill">Parallel launch</span>
+                </div>
+              ) : null}
+              {scene.id === "mapping" && selectedSegment ? (
+                <div className="lab-story-mobile-preview">
+                  <span className="lab-story-mini-pill">{selectedSegment.label}</span>
+                  <span className="lab-story-mini-pill">{selectedSegment.memberPersonaIds.length} personas</span>
+                </div>
+              ) : null}
+              {scene.id === "merge" && selectedPack ? (
+                <div className="lab-story-mobile-preview">
+                  <span className="lab-story-mini-pill">{selectedPack.label}</span>
+                  <span className="lab-story-mini-pill">{selectedPack.supportingSourceIds.length} sources</span>
+                </div>
+              ) : null}
+              {scene.id === "interviews" && selectedInterview ? (
+                <div className="lab-story-mobile-preview">
+                  <span className="lab-story-mini-pill">{selectedInterview.segmentId}</span>
+                  <span className="lab-story-mini-pill">{stanceLabel(selectedInterview.stance)}</span>
+                </div>
+              ) : null}
+              {scene.id === "aggregation" ? (
+                <div className="lab-story-mobile-preview">
+                  <span className="lab-story-mini-pill">{aggregationRows.length} segment summaries</span>
+                  <span className="lab-story-mini-pill">{divergenceRows.length} divergences</span>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

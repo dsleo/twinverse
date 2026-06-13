@@ -292,6 +292,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const leFigaroAvailable = dailyQuestion?.status === "available";
   const isRunActive = run?.status === "running";
   const isManualStoryMode = mode === "manual" && Boolean(run);
+  const showManualFlowPreview = mode === "manual" && !run;
   const submitDisabled =
     isRunActive ||
     (mode === "manual" ? rawInput.trim().length < 10 : mode === "le_figaro_daily" ? isDailyQuestionLoading || !leFigaroAvailable : false);
@@ -339,7 +340,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         </section>
       ) : null}
 
-      <section className="lab-card lab-command">
+      <section id="lab-command" className="lab-card lab-command">
         <form onSubmit={handleSubmit} className="lab-form">
           {isLeFigaroMode ? (
             <article className="lab-readonly-prompt">
@@ -436,8 +437,52 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         </form>
       </section>
 
+      {showManualFlowPreview ? (
+        <section className="lab-card lab-flow-preview">
+          <div className="section-heading section-heading-compact">
+            <div>
+              <div className="section-label">Flow preview</div>
+              <h2>What this run will show</h2>
+            </div>
+            <p>Before you run, the lab already explains the six-stage choreography.</p>
+          </div>
+          <div className="lab-flow-preview-grid">
+            <article className="lab-flow-preview-card">
+              <span>01</span>
+              <strong>Question intake</strong>
+              <p>The prompt enters the lab as one object.</p>
+            </article>
+            <article className="lab-flow-preview-card">
+              <span>02</span>
+              <strong>Parallel launch</strong>
+              <p>Segmentation and retrieval start together.</p>
+            </article>
+            <article className="lab-flow-preview-card">
+              <span>03</span>
+              <strong>Persona mapping</strong>
+              <p>People are recruited into five audience clusters.</p>
+            </article>
+            <article className="lab-flow-preview-card">
+              <span>04</span>
+              <strong>Context packaging</strong>
+              <p>Sources merge into segment-specific packs.</p>
+            </article>
+            <article className="lab-flow-preview-card">
+              <span>05</span>
+              <strong>Interview round</strong>
+              <p>Each cluster runs structured persona interviews.</p>
+            </article>
+            <article className="lab-flow-preview-card">
+              <span>06</span>
+              <strong>Aggregation</strong>
+              <p>The final synthesis condenses all interviews.</p>
+            </article>
+          </div>
+        </section>
+      ) : null}
+
       {run ? (
-        <section className="lab-card lab-summary">
+        <section id="lab-summary" className="lab-card lab-summary">
           <div className="section-heading section-heading-compact">
             <div>
               <div className="section-label">Run summary</div>
@@ -449,6 +494,31 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <button key={item.id} type="button" className="summary-card summary-card-button" onClick={() => jumpToSection(item.targetId)}>
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {isManualStoryMode && run?.steps?.length ? (
+        <section id="lab-diagnostics" className="lab-card lab-diagnostics">
+          <div className="section-heading section-heading-compact">
+            <div>
+              <div className="section-label">Diagnostics</div>
+              <h2>Live pipeline status</h2>
+            </div>
+            {currentStage?.summary ? <p>{currentStage.summary}</p> : null}
+          </div>
+          <div className="lab-diagnostics-grid">
+            {run.steps.map((step) => (
+              <button
+                key={step.id}
+                type="button"
+                className={`lab-diagnostics-pill lab-diagnostics-${step.status}`}
+                onClick={() => jumpToSection(step.id === "population_mapping" ? "lab-population" : step.id === "retrieval" ? "lab-sources" : step.id === "context_packs" ? "lab-sources" : step.id === "persona_reactions" ? "lab-reactions" : "lab-divergence")}
+              >
+                <strong>{step.label}</strong>
+                <span>{step.status}</span>
               </button>
             ))}
           </div>

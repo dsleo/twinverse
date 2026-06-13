@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { PersistedLabRun } from "../../lib/labSchemas";
 
 type StorySceneId = "question" | "split" | "mapping" | "merge" | "interviews" | "aggregation";
@@ -29,7 +29,7 @@ const LAB_STORY_SCENES: StoryScene[] = [
     title: "Two engines start at once",
     body: "The prompt immediately branches into audience segmentation and live information retrieval.",
     takeaway: "Population structure and evidence gathering run in parallel, not one after the other.",
-    targetId: "lab-diagnostics",
+    targetId: "lab-sources",
   },
   {
     id: "mapping",
@@ -114,6 +114,16 @@ function stageSummary(step?: PersistedLabRun["steps"][number]) {
   return step?.summary ?? (step?.status === "completed" ? "Completed." : step?.status === "running" ? "Running." : "Waiting.");
 }
 
+function truncateText(value: string | undefined, maxLength: number) {
+  if (!value) {
+    return "";
+  }
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength).trimEnd()}...`;
+}
+
 export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selectedReactionId, onSelectReaction, onJumpToSection }: LabStoryFlowProps) {
   const [activeSceneId, setActiveSceneId] = useState<StorySceneId>("question");
 
@@ -136,32 +146,6 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
     }),
     [run.status, stepsById],
   );
-
-  useEffect(() => {
-    const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-story-scene]"));
-    if (elements.length === 0) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-        const nextId = visible?.target.getAttribute("data-story-scene") as StorySceneId | null;
-        if (nextId) {
-          setActiveSceneId(nextId);
-        }
-      },
-      {
-        rootMargin: "-22% 0px -38% 0px",
-        threshold: [0.25, 0.55, 0.8],
-      },
-    );
-
-    elements.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
-  }, [run.id]);
 
   const segments = run.populationMap?.segments ?? [];
   const selectedSegment = segments.find((segment) => segment.id === selectedSegmentId) ?? segments[0] ?? null;
@@ -200,19 +184,17 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
           <div className="section-label">Guided flow</div>
           <h2>How the lab builds a grounded audience reading</h2>
         </div>
-        <p className="lab-story-lede">Scroll to advance the same live canvas from question intake to final synthesis. The detailed artifacts remain inspectable below.</p>
       </div>
 
       <div className="lab-story-layout">
-        <div className="lab-story-rail" aria-hidden="true">
+        <div className="lab-story-rail" aria-label="Guided flow stages">
           {LAB_STORY_SCENES.map((scene) => (
             <button
               key={scene.id}
               type="button"
               className={`lab-story-rail-item ${activeSceneId === scene.id ? "active" : ""}`}
-              onClick={() => {
-                document.querySelector<HTMLElement>(`[data-story-scene="${scene.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
+              onClick={() => setActiveSceneId(scene.id)}
+              aria-pressed={activeSceneId === scene.id}
             >
               <span className={`lab-story-rail-dot lab-story-status-${sceneStatuses[scene.id]}`} />
               <span>{scene.kicker}</span>
@@ -222,11 +204,6 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
 
         <div className="lab-story-canvas-column">
           <div className="lab-story-canvas-sticky">
-            <div className="lab-story-stage-chip">
-              <span>{activeScene.kicker}</span>
-              <strong>{activeScene.title}</strong>
-            </div>
-
             <div className="lab-story-canvas" data-scene={activeSceneId}>
               <div className="lab-story-orbit lab-story-orbit-a" />
               <div className="lab-story-orbit lab-story-orbit-b" />
@@ -235,7 +212,6 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                 <div className="lab-scene-header">
                   <span className="lab-scene-caption">One question enters the lab</span>
                   <h3>{run.promptSnapshot}</h3>
-                  <p>The prompt is normalized once, then sent into the pipeline.</p>
                 </div>
                 <div className="lab-prompt-pulse" />
               </section>
@@ -321,39 +297,59 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
               </section>
 
               <section className="lab-scene-layer lab-scene-interviews">
-                <div className="lab-story-interview-board">
-                  {interviews.map(({ segment, reactions }) => (
-                    <div key={segment.id} className="lab-story-interview-column">
-                      <div className="lab-story-column-header">
-                        <strong>{segment.label}</strong>
-                        <span>{reactions.length} voices</span>
-                      </div>
-                      <div className="lab-story-interview-list">
-                        {reactions.map(({ reaction, persona }) => {
-                          if (!persona) {
-                            return null;
+                <div className="lab-story-interview-stage">
+                  <div className="lab-story-interview-board">
+                    {interviews.map(({ segment, reactions }) => (
+                      <button
+                        key={segment.id}
+                        type="button"
+                        className={`lab-story-interview-column ${selectedInterview?.segmentId === segment.id ? "active" : ""}`}
+                        onClick={() => {
+                          const firstReaction = reactions[0]?.reaction;
+                          if (firstReaction) {
+                            onSelectReaction(`${firstReaction.segmentId}-${firstReaction.personaId}`);
                           }
-                          const reactionId = `${reaction.segmentId}-${reaction.personaId}`;
-                          const isActive = selectedInterview?.personaId === reaction.personaId && selectedInterview.segmentId === reaction.segmentId;
-                          return (
-                            <button
-                              key={reactionId}
-                              type="button"
-                              className={`lab-story-interview-card ${isActive ? "active" : ""}`}
-                              onClick={() => onSelectReaction(reactionId)}
-                            >
-                              <div className="lab-story-interview-topline">
-                                <span className="lab-story-emotion-token">{emotionEmoji(reaction.emotionalState)}</span>
-                                <strong>{persona.name}</strong>
-                              </div>
-                              <p>{reaction.reactionSummary}</p>
-                              <span className={`lab-stance lab-stance-${reaction.stance}`}>{stanceLabel(reaction.stance)}</span>
-                            </button>
-                          );
-                        })}
+                        }}
+                      >
+                        <div className="lab-story-column-header">
+                          <strong>{segment.label}</strong>
+                          <span>{reactions.length} voices</span>
+                        </div>
+                        <div className="lab-story-interview-summary">
+                          {reactions.map(({ reaction, persona }) => {
+                            if (!persona) {
+                              return null;
+                            }
+                            return (
+                              <span key={reaction.personaId} className="lab-story-mini-pill">
+                                {persona.name} · {stanceLabel(reaction.stance)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedInterview && selectedInterviewPersona ? (
+                    <article className="lab-story-interview-focus">
+                      <div className="lab-story-interview-topline">
+                        <div>
+                          <span className="lab-branch-label">Selected interview</span>
+                          <strong>{selectedInterviewPersona.name}</strong>
+                        </div>
+                        <span className={`lab-stance lab-stance-${selectedInterview.stance}`}>{stanceLabel(selectedInterview.stance)}</span>
                       </div>
-                    </div>
-                  ))}
+                      <p>{truncateText(selectedInterview.reactionSummary, 170)}</p>
+                      <div className="lab-story-chip-row">
+                        {selectedInterview.keyDrivers.slice(0, 3).map((driver) => (
+                          <span key={driver} className="lab-story-mini-pill">
+                            {driver}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ) : null}
                 </div>
               </section>
 
@@ -361,15 +357,15 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                 <div className="lab-story-aggregation-panel">
                   <div className="lab-story-aggregation-summary">
                     <span className="lab-branch-label">Synthesis</span>
-                    <strong>{run.aggregateReport?.executiveSummary ?? "Aggregation pending."}</strong>
-                    <p>{run.aggregateReport?.overallPattern ?? "Interview outputs are combined into one final reading."}</p>
+                    <strong>{truncateText(run.aggregateReport?.executiveSummary, 96) || "Aggregation pending."}</strong>
+                    <p>{truncateText(run.aggregateReport?.overallPattern, 120) || "Interview outputs are combined into one final reading."}</p>
                   </div>
                   <div className="lab-story-signal-grid">
                     {aggregationRows.map((row) => (
                       <article key={row.segmentId} className="lab-story-signal-card">
                         <strong>{row.label}</strong>
                         <span>{row.dominantStance}</span>
-                        <p>{row.emotionalTone}</p>
+                        <p>{truncateText(row.emotionalTone, 42)}</p>
                       </article>
                     ))}
                   </div>
@@ -385,105 +381,45 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                 </div>
               </section>
             </div>
-
-            <div className="lab-story-stage-footer">
-              <div>
-                <div className="section-label">Current scene</div>
-                <p>{activeScene.takeaway}</p>
-              </div>
-              <button type="button" className="ghost-button" onClick={() => onJumpToSection(activeScene.targetId)}>
-                Inspect this stage
-              </button>
-            </div>
           </div>
         </div>
 
-        <div className="lab-story-panels">
-          {LAB_STORY_SCENES.map((scene) => (
-            <article key={scene.id} data-story-scene={scene.id} className={`lab-story-panel ${activeSceneId === scene.id ? "active" : ""}`}>
-              <span className={`lab-story-panel-status lab-story-status-${sceneStatuses[scene.id]}`} />
-              <div className="lab-story-panel-copy">
-                <div className="lab-story-panel-kicker">{scene.kicker}</div>
-                <h3>{scene.title}</h3>
-                <p>{scene.body}</p>
-                <strong>{scene.takeaway}</strong>
-                {scene.id === "mapping" && selectedSegment ? (
-                  <div className="lab-story-panel-facts">
-                    <span>{selectedSegment.memberPersonaIds.length} mapped personas</span>
-                    <span>{selectedSegment.concerns.slice(0, 2).join(" / ")}</span>
-                    {selectedSegmentPersonas[0] ? <span>{selectedSegmentPersonas[0].name} anchors the cluster view</span> : null}
-                  </div>
-                ) : null}
-                {scene.id === "merge" && selectedPack ? (
-                  <div className="lab-story-panel-facts">
-                    <span>{selectedPack.supportingSourceIds.length} linked sources</span>
-                    <span>{selectedPack.emotionalPrimers.slice(0, 2).join(" / ")}</span>
-                  </div>
-                ) : null}
-                {scene.id === "interviews" && selectedInterview && selectedInterviewPersona ? (
-                  <div className="lab-story-panel-facts">
-                    <span>{selectedInterviewPersona.name}</span>
-                    <span>{selectedInterviewPersona.occupation}</span>
-                    <span>{stanceLabel(selectedInterview.stance)}</span>
-                  </div>
-                ) : null}
+        <aside className="lab-story-panel active">
+          <span className={`lab-story-panel-status lab-story-status-${sceneStatuses[activeScene.id]}`} />
+          <div className="lab-story-panel-copy">
+            <div className="lab-story-panel-head">
+              <div>
+                <div className="lab-story-panel-kicker">{activeScene.kicker}</div>
+                <h3>{activeScene.title}</h3>
               </div>
-            </article>
-          ))}
-        </div>
-
-        <div className="lab-story-mobile-stack" aria-label="Story stages">
-          {LAB_STORY_SCENES.map((scene) => (
-            <article key={scene.id} className={`lab-story-mobile-card ${activeSceneId === scene.id ? "active" : ""}`}>
-              <div className="lab-story-mobile-topline">
-                <span className={`lab-story-panel-status lab-story-status-${sceneStatuses[scene.id]}`} />
-                <div>
-                  <div className="lab-story-panel-kicker">{scene.kicker}</div>
-                  <h3>{scene.title}</h3>
-                </div>
+              <button type="button" className="icon-button lab-story-inspect-icon" onClick={() => onJumpToSection(activeScene.targetId)} aria-label="Inspect this stage">
+                <span aria-hidden="true">⌕</span>
+              </button>
+            </div>
+            <p>{activeScene.body}</p>
+            <strong>{activeScene.takeaway}</strong>
+            {activeScene.id === "mapping" && selectedSegment ? (
+              <div className="lab-story-panel-facts">
+                <span>{selectedSegment.memberPersonaIds.length} mapped personas</span>
+                <span>{selectedSegment.concerns.slice(0, 2).join(" / ")}</span>
+                {selectedSegmentPersonas[0] ? <span>{selectedSegmentPersonas[0].name} anchors the cluster view</span> : null}
               </div>
-              <p>{scene.body}</p>
-              {scene.id === "question" ? (
-                <div className="lab-story-mobile-preview">
-                  <span className="lab-story-mini-pill">Question intake</span>
-                  <span className="lab-story-mini-pill">Single prompt</span>
-                  <span className="lab-story-mini-pill">Start analysis cue</span>
-                </div>
-              ) : null}
-              {scene.id === "split" ? (
-                <div className="lab-story-mobile-preview">
-                  <span className="lab-story-mini-pill">Segmentation</span>
-                  <span className="lab-story-mini-pill">Retrieval</span>
-                  <span className="lab-story-mini-pill">Parallel launch</span>
-                </div>
-              ) : null}
-              {scene.id === "mapping" && selectedSegment ? (
-                <div className="lab-story-mobile-preview">
-                  <span className="lab-story-mini-pill">{selectedSegment.label}</span>
-                  <span className="lab-story-mini-pill">{selectedSegment.memberPersonaIds.length} personas</span>
-                </div>
-              ) : null}
-              {scene.id === "merge" && selectedPack ? (
-                <div className="lab-story-mobile-preview">
-                  <span className="lab-story-mini-pill">{selectedPack.label}</span>
-                  <span className="lab-story-mini-pill">{selectedPack.supportingSourceIds.length} sources</span>
-                </div>
-              ) : null}
-              {scene.id === "interviews" && selectedInterview ? (
-                <div className="lab-story-mobile-preview">
-                  <span className="lab-story-mini-pill">{selectedInterview.segmentId}</span>
-                  <span className="lab-story-mini-pill">{stanceLabel(selectedInterview.stance)}</span>
-                </div>
-              ) : null}
-              {scene.id === "aggregation" ? (
-                <div className="lab-story-mobile-preview">
-                  <span className="lab-story-mini-pill">{aggregationRows.length} segment summaries</span>
-                  <span className="lab-story-mini-pill">{divergenceRows.length} divergences</span>
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
+            ) : null}
+            {activeScene.id === "merge" && selectedPack ? (
+              <div className="lab-story-panel-facts">
+                <span>{selectedPack.supportingSourceIds.length} linked sources</span>
+                <span>{selectedPack.emotionalPrimers.slice(0, 2).join(" / ")}</span>
+              </div>
+            ) : null}
+            {activeScene.id === "interviews" && selectedInterview && selectedInterviewPersona ? (
+              <div className="lab-story-panel-facts">
+                <span>{selectedInterviewPersona.name}</span>
+                <span>{selectedInterviewPersona.occupation}</span>
+                <span>{stanceLabel(selectedInterview.stance)}</span>
+              </div>
+            ) : null}
+          </div>
+        </aside>
       </div>
     </section>
   );

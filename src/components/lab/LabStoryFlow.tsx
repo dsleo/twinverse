@@ -17,50 +17,50 @@ type StoryScene = {
 const LAB_STORY_SCENES: StoryScene[] = [
   {
     id: "question",
-    kicker: "01. Intake",
-    title: "One question enters the lab",
-    body: "The system starts from a single public question and prepares one orchestrated analysis pass.",
-    takeaway: "Nothing is simulated yet. The prompt is the only object in play.",
+    kicker: "01. Question",
+    title: "The question sets the direction",
+    body: "Everything starts from the issue being explored and the audience reaction we want to understand.",
+    takeaway: "This is the starting point for the whole reading.",
     targetId: "lab-command",
   },
   {
     id: "split",
-    kicker: "02. Parallel launch",
-    title: "Two engines start at once",
-    body: "The prompt immediately branches into audience segmentation and live information retrieval.",
-    takeaway: "Population structure and evidence gathering run in parallel, not one after the other.",
+    kicker: "02. Audience + context",
+    title: "The audience view and context view are prepared together",
+    body: "The lab identifies the relevant audience groups while gathering the context that will shape their reactions.",
+    takeaway: "Audience understanding and context building happen side by side.",
     targetId: "lab-sources",
   },
   {
     id: "mapping",
-    kicker: "03. Population mapping",
-    title: "Personas are recruited into clusters",
-    body: "Representative personas are sorted into distinct clusters so the system knows which publics matter for this question.",
-    takeaway: "The model does not reason about a generic average citizen.",
+    kicker: "03. Audience groups",
+    title: "Different publics come into view",
+    body: "The response is organized around distinct audience groups so differences in perspective are visible from the start.",
+    takeaway: "This is not one average reaction, but several clear audience lenses.",
     targetId: "lab-population",
   },
   {
     id: "merge",
-    kicker: "04. Context packaging",
-    title: "Clusters merge with retrieved information",
-    body: "Evidence flows into each cluster to create one briefing package per audience segment.",
-    takeaway: "Information becomes personalized context, not just a flat list of sources.",
+    kicker: "04. Tailored context",
+    title: "Each audience group gets the context that matters to it",
+    body: "Relevant information is matched to each group so their response is grounded in the issues most likely to shape their view.",
+    takeaway: "The same question is framed differently for different audiences.",
     targetId: "lab-sources",
   },
   {
     id: "interviews",
-    kicker: "05. Interview round",
-    title: "Each cluster runs structured persona interviews",
-    body: "Selected personas react inside their cluster lane using the package that was built for them.",
-    takeaway: "These are grouped interview rounds, not isolated reactions.",
+    kicker: "05. Reactions",
+    title: "Each audience group responds in its own voice",
+    body: "The lab captures how different groups interpret the question, what resonates with them, and where they hesitate or disagree.",
+    takeaway: "This is where distinct reactions become visible.",
     targetId: "lab-reactions",
   },
   {
     id: "aggregation",
     kicker: "06. Synthesis",
-    title: "The system aggregates all interviews into one reading",
-    body: "Cluster-level splits, recurring drivers, and disagreement patterns are synthesized into a final report.",
-    takeaway: "The top-line reading is computed from the interview outputs.",
+    title: "A shared reading emerges from all reactions",
+    body: "The lab brings the group responses together to surface the main patterns, tensions, and points of divergence.",
+    takeaway: "The final reading is built from all responses, not a single viewpoint.",
     targetId: "lab-divergence",
   },
 ];
@@ -111,7 +111,7 @@ function stanceLabel(stance: PersistedLabRun["reactions"][number]["stance"]) {
 }
 
 function stageSummary(step?: PersistedLabRun["steps"][number]) {
-  return step?.summary ?? (step?.status === "completed" ? "Completed." : step?.status === "running" ? "Running." : "Waiting.");
+  return step?.status === "completed" ? "Complete." : step?.status === "running" ? "In progress." : "Waiting.";
 }
 
 function truncateText(value: string | undefined, maxLength: number) {
@@ -171,18 +171,23 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
     run.reactions.find((reaction) => `${reaction.segmentId}-${reaction.personaId}` === selectedReactionId) ?? interviews.flatMap((entry) => entry.reactions.map((item) => item.reaction))[0] ?? null;
 
   const selectedInterviewPersona = selectedInterview ? run.panel.find((persona) => persona.id === selectedInterview.personaId) ?? null : null;
-  const aggregationRows = run.aggregateReport?.perSegmentSummary ?? [];
   const branchPopulationStep = stepsById.get("population_mapping");
   const branchRetrievalStep = stepsById.get("retrieval");
   const activeScene = LAB_STORY_SCENES.find((scene) => scene.id === activeSceneId) ?? LAB_STORY_SCENES[0];
-  const divergenceRows = run.aggregateReport?.mainDivergences ?? [];
+  const interviewQuotes = run.reactions
+    .map((reaction) => ({
+      reaction,
+      persona: run.panel.find((persona) => persona.id === reaction.personaId) ?? null,
+    }))
+    .filter((entry): entry is { reaction: PersistedLabRun["reactions"][number]; persona: NonNullable<PersistedLabRun["panel"][number]> } => Boolean(entry.persona))
+    .slice(0, 3);
 
   return (
     <section id="lab-story" className="lab-story-shell">
       <div className="section-heading section-heading-compact lab-story-heading">
         <div>
           <div className="section-label">Guided flow</div>
-          <h2>How the lab builds a grounded audience reading</h2>
+          <h2>How the reading comes together</h2>
         </div>
       </div>
 
@@ -210,7 +215,7 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
 
               <section className="lab-scene-layer lab-scene-question">
                 <div className="lab-scene-header">
-                  <span className="lab-scene-caption">One question enters the lab</span>
+                  <span className="lab-scene-caption">Question being explored</span>
                   <h3>{run.promptSnapshot}</h3>
                 </div>
                 <div className="lab-prompt-pulse" />
@@ -218,13 +223,13 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
 
               <section className="lab-scene-layer lab-scene-split">
                 <div className="lab-split-node">
-                  <span className="lab-branch-label">Cluster segmentation</span>
-                  <strong>{branchPopulationStep?.label ?? "Population mapping"}</strong>
+                  <span className="lab-branch-label">Audience groups</span>
+                  <strong>Audience groups</strong>
                   <p>{stageSummary(branchPopulationStep)}</p>
                 </div>
                 <div className="lab-split-node">
-                  <span className="lab-branch-label">Information retrieval</span>
-                  <strong>{branchRetrievalStep?.label ?? "Retrieval"}</strong>
+                  <span className="lab-branch-label">Relevant context</span>
+                  <strong>Relevant context</strong>
                   <p>{stageSummary(branchRetrievalStep)}</p>
                 </div>
                 <div className="lab-split-rails" aria-hidden="true">
@@ -246,25 +251,7 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                         onFocus={() => onSelectSegment(segment.id)}
                         onClick={() => onSelectSegment(segment.id)}
                       >
-                        <div className="lab-story-cluster-topline">
-                          <strong>{segment.label}</strong>
-                          <span>{segment.memberPersonaIds.length}</span>
-                        </div>
-                        <p>{segment.summary}</p>
-                        <div className="lab-story-chip-row">
-                          {segment.representativePersonaIds.slice(0, 3).map((personaId) => {
-                            const persona = run.panel.find((entry) => entry.id === personaId);
-                            if (!persona) {
-                              return null;
-                            }
-                            return (
-                              <span key={persona.id} className="lab-story-persona-chip">
-                                <b>{persona.name.slice(0, 1)}</b>
-                                {persona.occupation}
-                              </span>
-                            );
-                          })}
-                        </div>
+                        <strong>{segment.label}</strong>
                       </button>
                     );
                   })}
@@ -282,10 +269,10 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                 </div>
                 <div className="lab-story-pack-card">
                   <div className="lab-story-pack-topline">
-                    <span className="lab-branch-label">Personalized package</span>
-                    <strong>{selectedPack?.label ?? "Context pack pending"}</strong>
+                    <span className="lab-branch-label">Group briefing</span>
+                    <strong>{selectedPack?.label ?? "Briefing in preparation"}</strong>
                   </div>
-                  <p>{selectedPack?.conciseBriefing ?? "Retrieved evidence is merged into a segment-specific briefing package."}</p>
+                  <p>{selectedPack?.conciseBriefing ?? "Relevant context is assembled into a briefing for this audience group."}</p>
                   <div className="lab-story-chip-row">
                     {(selectedPack?.practicalImplications ?? selectedSegment?.concerns ?? []).slice(0, 3).map((item) => (
                       <span key={item} className="lab-story-mini-pill">
@@ -298,86 +285,32 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
 
               <section className="lab-scene-layer lab-scene-interviews">
                 <div className="lab-story-interview-stage">
-                  <div className="lab-story-interview-board">
-                    {interviews.map(({ segment, reactions }) => (
+                  <div className="lab-story-quote-board">
+                    {interviewQuotes.map(({ reaction, persona }) => (
                       <button
-                        key={segment.id}
+                        key={`${reaction.segmentId}-${reaction.personaId}`}
                         type="button"
-                        className={`lab-story-interview-column ${selectedInterview?.segmentId === segment.id ? "active" : ""}`}
-                        onClick={() => {
-                          const firstReaction = reactions[0]?.reaction;
-                          if (firstReaction) {
-                            onSelectReaction(`${firstReaction.segmentId}-${firstReaction.personaId}`);
-                          }
-                        }}
+                        className={`lab-story-quote-card ${selectedReactionId === `${reaction.segmentId}-${reaction.personaId}` ? "active" : ""}`}
+                        onClick={() => onSelectReaction(`${reaction.segmentId}-${reaction.personaId}`)}
                       >
-                        <div className="lab-story-column-header">
-                          <strong>{segment.label}</strong>
-                          <span>{reactions.length} voices</span>
+                        <div className="lab-story-quote-head">
+                          <strong>{persona.name}</strong>
+                          <span>{persona.occupation}</span>
                         </div>
-                        <div className="lab-story-interview-summary">
-                          {reactions.map(({ reaction, persona }) => {
-                            if (!persona) {
-                              return null;
-                            }
-                            return (
-                              <span key={reaction.personaId} className="lab-story-mini-pill">
-                                {persona.name} · {stanceLabel(reaction.stance)}
-                              </span>
-                            );
-                          })}
-                        </div>
+                        <p>"{truncateText(reaction.reactionSummary, 120)}"</p>
                       </button>
                     ))}
                   </div>
-
-                  {selectedInterview && selectedInterviewPersona ? (
-                    <article className="lab-story-interview-focus">
-                      <div className="lab-story-interview-topline">
-                        <div>
-                          <span className="lab-branch-label">Selected interview</span>
-                          <strong>{selectedInterviewPersona.name}</strong>
-                        </div>
-                        <span className={`lab-stance lab-stance-${selectedInterview.stance}`}>{stanceLabel(selectedInterview.stance)}</span>
-                      </div>
-                      <p>{truncateText(selectedInterview.reactionSummary, 170)}</p>
-                      <div className="lab-story-chip-row">
-                        {selectedInterview.keyDrivers.slice(0, 3).map((driver) => (
-                          <span key={driver} className="lab-story-mini-pill">
-                            {driver}
-                          </span>
-                        ))}
-                      </div>
-                    </article>
-                  ) : null}
                 </div>
               </section>
 
               <section className="lab-scene-layer lab-scene-aggregation">
-                <div className="lab-story-aggregation-panel">
+                <div className="lab-story-aggregation-mark">
                   <div className="lab-story-aggregation-summary">
-                    <span className="lab-branch-label">Synthesis</span>
-                    <strong>{truncateText(run.aggregateReport?.executiveSummary, 96) || "Aggregation pending."}</strong>
-                    <p>{truncateText(run.aggregateReport?.overallPattern, 120) || "Interview outputs are combined into one final reading."}</p>
+                    <span className="lab-branch-label">Combined reading</span>
+                    <strong>{truncateText(run.aggregateReport?.executiveSummary, 96) || "Synthesis in preparation."}</strong>
+                    <p>{truncateText(run.aggregateReport?.overallPattern, 120) || "The full reading is formed by combining responses across groups."}</p>
                   </div>
-                  <div className="lab-story-signal-grid">
-                    {aggregationRows.map((row) => (
-                      <article key={row.segmentId} className="lab-story-signal-card">
-                        <strong>{row.label}</strong>
-                        <span>{row.dominantStance}</span>
-                        <p>{truncateText(row.emotionalTone, 42)}</p>
-                      </article>
-                    ))}
-                  </div>
-                  {divergenceRows.length ? (
-                    <div className="lab-story-divergence-list" aria-label="Main divergences">
-                      {divergenceRows.map((item) => (
-                        <span key={item.title} className="lab-story-mini-pill">
-                          {item.title}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
               </section>
             </div>
@@ -400,14 +333,14 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
             <strong>{activeScene.takeaway}</strong>
             {activeScene.id === "mapping" && selectedSegment ? (
               <div className="lab-story-panel-facts">
-                <span>{selectedSegment.memberPersonaIds.length} mapped personas</span>
+                <span>{selectedSegment.memberPersonaIds.length} people represented</span>
                 <span>{selectedSegment.concerns.slice(0, 2).join(" / ")}</span>
-                {selectedSegmentPersonas[0] ? <span>{selectedSegmentPersonas[0].name} anchors the cluster view</span> : null}
+                {selectedSegmentPersonas[0] ? <span>{selectedSegmentPersonas[0].name} is an example voice in this group</span> : null}
               </div>
             ) : null}
             {activeScene.id === "merge" && selectedPack ? (
               <div className="lab-story-panel-facts">
-                <span>{selectedPack.supportingSourceIds.length} linked sources</span>
+                <span>{selectedPack.supportingSourceIds.length} supporting sources</span>
                 <span>{selectedPack.emotionalPrimers.slice(0, 2).join(" / ")}</span>
               </div>
             ) : null}

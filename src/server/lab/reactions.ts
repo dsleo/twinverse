@@ -4,6 +4,7 @@ import { z } from "zod";
 import { reactionResultSchema, type AssignedSegment, type ContextPack, type LabInput, type NormalizedPersona, type RetrievedSource } from "../../lib/labSchemas";
 import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
+import { type TokenUsage } from "./tokenAccounting";
 
 const reactionOutputSchema = reactionResultSchema.omit({
   personaId: true,
@@ -20,6 +21,21 @@ const batchedReactionOutputSchema = z.object({
   ).min(1),
 });
 
+export type ReactionBatchResult = {
+  reactions: z.infer<typeof reactionResultSchema>[];
+  diagnostics: {
+    name: string;
+    model: string;
+    responseId?: string;
+    outputText: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    tokenUsageEstimated: boolean;
+  };
+  tokenUsage: TokenUsage;
+};
+
 export async function buildReactionsForSegment(
   input: LabInput,
   segment: AssignedSegment,
@@ -27,7 +43,7 @@ export async function buildReactionsForSegment(
   contextPack: ContextPack,
   sources: RetrievedSource[],
   options?: { runId?: string },
-) {
+): Promise<ReactionBatchResult> {
   if (options?.runId) {
     logLabRun(options.runId, "reaction-batch-build", {
       segment: segment.id,
@@ -112,5 +128,6 @@ export async function buildReactionsForSegment(
   return {
     reactions,
     diagnostics: result.diagnostics,
+    tokenUsage: result.tokenUsage,
   };
 }

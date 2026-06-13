@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
+import { type TokenUsage } from "./tokenAccounting";
 import { audiencePresetAffinityScore, audiencePresetDescription } from "./audiencePresets";
 import { metadataTaxonomy } from "./personaSample";
 import {
@@ -61,6 +62,22 @@ export type PersonaScore = {
 type ScoredCandidate = {
   persona: NormalizedPersona;
   score: PersonaScore;
+};
+
+export type PopulationMappingResult = {
+  assignment: z.infer<typeof populationAssignmentResultSchema>;
+  panel: NormalizedPersona[];
+  diagnostics: {
+    name: string;
+    model: string;
+    responseId?: string;
+    outputText: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    tokenUsageEstimated: boolean;
+  };
+  tokenUsage: TokenUsage;
 };
 
 type MetadataValueFrequencies = Partial<Record<keyof PersonaAssignmentMetadata, Map<string, number>>>;
@@ -319,7 +336,7 @@ export async function mapPopulationToPanel(
   cache: PersonaCache,
   audiencePreset: AudiencePreset = "france_general",
   options?: { runId?: string },
-) {
+): Promise<PopulationMappingResult> {
   const audience = audiencePresetSchema.parse(audiencePreset);
   if (options?.runId) {
     logLabRun(options.runId, "population-mapping-start", {
@@ -424,5 +441,6 @@ export async function mapPopulationToPanel(
     assignment: result,
     panel,
     diagnostics: mapped.diagnostics,
+    tokenUsage: mapped.tokenUsage,
   };
 }

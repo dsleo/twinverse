@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
 import { TvAudienceResult } from "./TvAudienceResult";
+import { LabStoryFlow } from "./LabStoryFlow";
 import { runModeLabels } from "../../lib/labAudience";
 import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
 
@@ -290,6 +291,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
 
   const leFigaroAvailable = dailyQuestion?.status === "available";
   const isRunActive = run?.status === "running";
+  const isManualStoryMode = mode === "manual" && Boolean(run);
   const submitDisabled =
     isRunActive ||
     (mode === "manual" ? rawInput.trim().length < 10 : mode === "le_figaro_daily" ? isDailyQuestionLoading || !leFigaroAvailable : false);
@@ -337,7 +339,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         </section>
       ) : null}
 
-      <section className="lab-card lab-command">
+      <section id="lab-command" className="lab-card lab-command">
         <form onSubmit={handleSubmit} className="lab-form">
           {isLeFigaroMode ? (
             <article className="lab-readonly-prompt">
@@ -435,11 +437,11 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
       </section>
 
       {run ? (
-        <section className="lab-card lab-summary">
+        <section id="lab-summary" className="lab-card lab-summary">
           <div className="section-heading section-heading-compact">
             <div>
               <div className="section-label">Run summary</div>
-              <h2>At a glance</h2>
+              <h2>{isManualStoryMode ? "Flow at a glance" : "At a glance"}</h2>
             </div>
           </div>
           <div className="summary-grid">
@@ -453,7 +455,18 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         </section>
       ) : null}
 
-      {run?.steps?.length ? (
+      {isManualStoryMode && run ? (
+        <LabStoryFlow
+          run={run}
+          selectedSegmentId={selectedSegmentId}
+          onSelectSegment={setSelectedSegmentId}
+          selectedReactionId={selectedReactionId}
+          onSelectReaction={(id) => setSelectedReactionId((current) => (current === id ? "" : id))}
+          onJumpToSection={jumpToSection}
+        />
+      ) : null}
+
+      {!isManualStoryMode && run?.steps?.length ? (
         <section className="lab-card">
           <div className="section-heading section-heading-compact">
             <div>
@@ -479,12 +492,15 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
       ) : null}
 
       {run?.populationMap ? (
-        <section id="lab-population" className="lab-card">
-          <div className="section-heading section-heading-compact">
+        <details id="lab-population" className="lab-card lab-collapsible" open={isManualStoryMode ? false : true}>
+          <summary className="lab-summary-toggle">
             <div>
-              <div className="section-label">Population map</div>
+              <div className="section-label">{isManualStoryMode ? "Inspect stage" : "Population map"}</div>
               <h2>{run.audiencePreset === "le_figaro_reader" ? "Reader-weighted segments" : "Question-driven segments"}</h2>
             </div>
+          </summary>
+          <div className="section-heading section-heading-compact">
+            {isManualStoryMode ? <p>Inspect the full population mapping after the guided flow.</p> : null}
           </div>
           <div className="segment-explorer">
             <div className="segment-list" role="list">
@@ -539,16 +555,19 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               </article>
             ) : null}
           </div>
-        </section>
+        </details>
       ) : null}
 
       {run?.reactions.length ? (
-        <section id="lab-reactions" className="lab-card">
-          <div className="section-heading section-heading-compact">
+        <details id="lab-reactions" className="lab-card lab-collapsible" open={isManualStoryMode ? false : true}>
+          <summary className="lab-summary-toggle">
             <div>
-              <div className="section-label">Reactions</div>
+              <div className="section-label">{isManualStoryMode ? "Inspect stage" : "Reactions"}</div>
               <h2>Persona reactions</h2>
             </div>
+          </summary>
+          <div className="section-heading section-heading-compact">
+            {isManualStoryMode ? <p>Open the interview-level details behind the narrative round.</p> : null}
           </div>
           <PersonaCarousel items={personaItems} selectedId={selectedReactionId} onToggle={(id) => setSelectedReactionId((current) => (current === id ? "" : id))} />
           {selectedReaction && selectedPersona ? (
@@ -597,16 +616,19 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               </div>
             </div>
           ) : null}
-        </section>
+        </details>
       ) : null}
 
       {run?.aggregateReport ? (
-        <section id="lab-divergence" className="lab-card">
-          <div className="section-heading section-heading-compact">
+        <details id="lab-divergence" className="lab-card lab-collapsible" open={isManualStoryMode ? false : true}>
+          <summary className="lab-summary-toggle">
             <div>
-              <div className="section-label">Divergence report</div>
+              <div className="section-label">{isManualStoryMode ? "Inspect stage" : "Divergence report"}</div>
               <h2>How the evaluated panel splits</h2>
             </div>
+          </summary>
+          <div className="section-heading section-heading-compact">
+            {isManualStoryMode ? <p>Open the underlying synthesis after the animated aggregation round.</p> : null}
           </div>
           <p>{run.aggregateReport.executiveSummary}</p>
           <p>{run.aggregateReport.overallPattern}</p>
@@ -618,7 +640,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             ))}
           </ul>
           <p className="lab-warning">{run.aggregateReport.caveats.join(" ")}</p>
-        </section>
+        </details>
       ) : null}
 
       {run?.tvPredictions && run.tvPredictions.length > 0 ? (
@@ -634,7 +656,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
       ) : null}
 
       {run?.retrieval?.sources.length ? (
-        <details id="lab-sources" className="lab-card lab-collapsible" open>
+        <details id="lab-sources" className="lab-card lab-collapsible">
           <summary className="lab-summary-toggle">
             <div>
               <div className="section-label">Source provenance</div>

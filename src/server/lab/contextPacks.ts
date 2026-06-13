@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
+import { type TokenUsage } from "./tokenAccounting";
 import {
   contextPackSchema,
   type AssignedSegment,
@@ -21,13 +22,28 @@ const batchedContextPackOutputSchema = z.object({
   contextPacks: z.array(contextPackOutputSchema).length(5),
 });
 
+export type ContextPackBatchResult = {
+  packs: ContextPack[];
+  diagnostics: {
+    name: string;
+    model: string;
+    responseId?: string;
+    outputText: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    tokenUsageEstimated: boolean;
+  };
+  tokenUsage: TokenUsage;
+};
+
 export async function buildContextPacks(
   input: LabInput,
   segments: AssignedSegment[],
   personasBySegment: Map<string, NormalizedPersona[]>,
   sources: RetrievedSource[],
   options?: { runId?: string },
-) {
+): Promise<ContextPackBatchResult> {
   if (options?.runId) {
     logLabRun(options.runId, "context-pack-batch-build", {
       segments: segments.length,
@@ -111,5 +127,6 @@ export async function buildContextPacks(
   return {
     packs,
     diagnostics: result.diagnostics,
+    tokenUsage: result.tokenUsage,
   };
 }

@@ -70,6 +70,7 @@ vi.mock("./populationMapping", () => ({
       },
     })),
     diagnostics: { name: "PopulationMapperAgent", model: "test", outputText: "{}" },
+    tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
   })),
 }));
 
@@ -110,6 +111,7 @@ vi.mock("./contextPacks", () => ({
       supportingSourceIds: ["source-1"],
     })),
     diagnostics: { name: "ContextPackBuilderAgentBatch", model: "test", outputText: "{}" },
+    tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
   })),
 }));
 
@@ -129,6 +131,7 @@ vi.mock("./reactions", () => ({
       misunderstanding: null,
     })),
     diagnostics: { name: "ReactionAgentBatch", model: "test", outputText: "{}" },
+    tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
   })),
 }));
 
@@ -153,6 +156,7 @@ vi.mock("./aggregation", () => ({
       ],
     },
     diagnostics: { name: "AggregatorAgent", model: "test", outputText: "{}" },
+    tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
   })),
 }));
 
@@ -273,7 +277,16 @@ describe("executeLabRun", () => {
                     issue_salience_tags: ["cost_of_living"],
                   },
                 })),
-                diagnostics: { name: "PopulationMapperAgent", model: "test", outputText: "{}" },
+                diagnostics: {
+                  name: "PopulationMapperAgent",
+                  model: "test",
+                  outputText: "{}",
+                  inputTokens: 10,
+                  outputTokens: 5,
+                  totalTokens: 15,
+                  tokenUsageEstimated: false,
+                },
+                tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
               }),
             20,
           );

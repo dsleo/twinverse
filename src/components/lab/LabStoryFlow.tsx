@@ -18,49 +18,49 @@ const LAB_STORY_SCENES: StoryScene[] = [
   {
     id: "question",
     kicker: "01. Question",
-    title: "The question sets the direction",
-    body: "Everything starts from the issue being explored and the audience reaction we want to understand.",
-    takeaway: "This is the starting point for the whole reading.",
+    title: "The question sets direction",
+    body: "Everything starts from the issue being explored and the reaction we want to understand.",
+    takeaway: "This is the starting point for the reading.",
     targetId: "lab-command",
   },
   {
     id: "split",
     kicker: "02. Audience + context",
-    title: "The audience view and context view are prepared together",
-    body: "The lab identifies the relevant audience groups while gathering the context that will shape their reactions.",
-    takeaway: "Audience understanding and context building happen side by side.",
+    title: "Audience and context take shape",
+    body: "The lab prepares the audience view and the surrounding context at the same time.",
+    takeaway: "Both views are built side by side.",
     targetId: "lab-sources",
   },
   {
     id: "mapping",
     kicker: "03. Audience groups",
     title: "Different publics come into view",
-    body: "The response is organized around distinct audience groups so differences in perspective are visible from the start.",
-    takeaway: "This is not one average reaction, but several clear audience lenses.",
+    body: "The reading is organized around distinct audience groups from the start.",
+    takeaway: "This is not one average reaction.",
     targetId: "lab-population",
   },
   {
     id: "merge",
     kicker: "04. Tailored context",
-    title: "Each audience group gets the context that matters to it",
-    body: "Relevant information is matched to each group so their response is grounded in the issues most likely to shape their view.",
-    takeaway: "The same question is framed differently for different audiences.",
+    title: "Each group gets the right context",
+    body: "Relevant information is matched to each group before reactions are formed.",
+    takeaway: "The same question lands differently by audience.",
     targetId: "lab-sources",
   },
   {
     id: "interviews",
     kicker: "05. Reactions",
-    title: "Each audience group responds in its own voice",
-    body: "The lab captures how different groups interpret the question, what resonates with them, and where they hesitate or disagree.",
-    takeaway: "This is where distinct reactions become visible.",
+    title: "Different voices respond",
+    body: "The lab reveals what resonates, what worries people, and where views diverge.",
+    takeaway: "Distinct reactions become visible here.",
     targetId: "lab-reactions",
   },
   {
     id: "aggregation",
     kicker: "06. Synthesis",
-    title: "A shared reading emerges from all reactions",
-    body: "The lab brings the group responses together to surface the main patterns, tensions, and points of divergence.",
-    takeaway: "The final reading is built from all responses, not a single viewpoint.",
+    title: "A shared reading emerges",
+    body: "The group responses are brought together into one clear overall reading.",
+    takeaway: "The final view is built from all responses.",
     targetId: "lab-divergence",
   },
 ];
@@ -272,9 +272,9 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                     <span className="lab-branch-label">Group briefing</span>
                     <strong>{selectedPack?.label ?? "Briefing in preparation"}</strong>
                   </div>
-                  <p>{selectedPack?.conciseBriefing ?? "Relevant context is assembled into a briefing for this audience group."}</p>
+                  <p>{truncateText(selectedPack?.conciseBriefing, 96) || "Relevant context is assembled into a briefing for this audience group."}</p>
                   <div className="lab-story-chip-row">
-                    {(selectedPack?.practicalImplications ?? selectedSegment?.concerns ?? []).slice(0, 3).map((item) => (
+                    {(selectedPack?.practicalImplications ?? selectedSegment?.concerns ?? []).slice(0, 2).map((item) => (
                       <span key={item} className="lab-story-mini-pill">
                         {item}
                       </span>
@@ -297,7 +297,7 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                           <strong>{persona.name}</strong>
                           <span>{persona.occupation}</span>
                         </div>
-                        <p>"{truncateText(reaction.reactionSummary, 120)}"</p>
+                        <p>"{truncateText(reaction.reactionSummary, 96)}"</p>
                       </button>
                     ))}
                   </div>
@@ -309,7 +309,7 @@ export function LabStoryFlow({ run, selectedSegmentId, onSelectSegment, selected
                   <div className="lab-story-aggregation-summary">
                     <span className="lab-branch-label">Combined reading</span>
                     <strong>{truncateText(run.aggregateReport?.executiveSummary, 96) || "Synthesis in preparation."}</strong>
-                    <p>{truncateText(run.aggregateReport?.overallPattern, 120) || "The full reading is formed by combining responses across groups."}</p>
+                    <p>{truncateText(run.aggregateReport?.overallPattern, 104) || "The full reading is formed by combining responses across groups."}</p>
                   </div>
                 </div>
               </section>

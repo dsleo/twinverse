@@ -132,6 +132,8 @@
   background: transparent;
   color: var(--quiet);
   text-align: left;
+  font-size: 0.86rem;
+  font-weight: 500;
   cursor: pointer;
   transition:
     color 180ms ease,
@@ -192,9 +194,9 @@
 .lab-scene-caption,
 .lab-branch-label {
   color: var(--accent);
-  font-size: 0.74rem;
+  font-size: 0.71rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -272,16 +274,14 @@
 }
 
 .lab-scene-header h3 {
-  font-size: clamp(1.55rem, 2.6vw, 2.3rem);
-  line-height: 1.05;
+  font-size: clamp(1.4rem, 2.3vw, 2rem);
+  line-height: 1.12;
 }
 
 .lab-scene-header p,
 .lab-story-panel p,
 .lab-story-pack-card p,
 .lab-story-cluster-card p,
-.lab-story-interview-card p,
-.lab-story-signal-card p,
 .lab-split-node p {
   color: var(--muted);
 }
@@ -318,16 +318,16 @@
 }
 
 .lab-scene-split {
+  width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(1rem, 3vw, 2rem);
-  padding-top: 7.5rem;
+  gap: clamp(1.25rem, 3vw, 2.25rem);
+  padding: 5.5rem clamp(2rem, 5vw, 3.5rem) 2rem;
+  align-content: center;
 }
 
 .lab-split-node,
 .lab-story-pack-card,
 .lab-story-source-card,
-.lab-story-interview-card,
-.lab-story-signal-card,
 .lab-story-cluster-card,
 .lab-story-aggregation-summary {
   border: 1px solid var(--line);
@@ -338,16 +338,20 @@
 .lab-split-node {
   align-self: center;
   display: grid;
-  gap: 0.5rem;
-  padding: 1.15rem;
+  gap: 0.45rem;
+  width: min(100%, 15rem);
+  justify-self: center;
+  padding: 1.2rem 1.1rem;
+  text-align: center;
 }
 
 .lab-story-cluster-grid {
-  width: 100%;
+  width: min(100%, 31rem);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.9rem;
+  gap: 1rem;
   align-content: center;
+  justify-self: center;
 }
 
 .lab-story-cluster-card {
@@ -374,13 +378,13 @@
 }
 
 .lab-story-cluster-card strong {
+  font-size: 1.03rem;
+  font-weight: 600;
   text-align: center;
 }
 
-.lab-story-cluster-topline,
 .lab-story-pack-topline,
-.lab-story-column-header,
-.lab-story-interview-topline {
+.lab-story-cluster-topline {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -392,7 +396,6 @@
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
 }
 
-.lab-story-persona-chip,
 .lab-story-mini-pill {
   display: inline-flex;
   align-items: center;
@@ -408,31 +411,27 @@
   text-overflow: ellipsis;
 }
 
-.lab-story-persona-chip b {
-  width: 1.35rem;
-  height: 1.35rem;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--accent) 16%, transparent);
-  color: var(--text);
-  font-size: 0.72rem;
-}
-
 .lab-scene-merge,
 .lab-scene-aggregation {
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 1rem;
+  width: 100%;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  gap: 1.15rem;
+  align-content: center;
+  padding-inline: clamp(1.25rem, 3vw, 2rem);
 }
 
 .lab-story-source-stack {
+  width: min(100%, 13.5rem);
+  justify-self: center;
+  display: grid;
+  gap: 0.65rem;
   align-content: center;
 }
 
 .lab-story-source-card {
   display: grid;
   gap: 0.35rem;
-  padding: 0.9rem 1rem;
+  padding: 0.8rem 0.95rem;
   transform: translateX(-18px);
   animation: lab-drift 4.2s ease-in-out infinite;
 }
@@ -451,23 +450,31 @@
 
 .lab-story-pack-card {
   align-self: center;
+  width: min(100%, 18.5rem);
+  justify-self: center;
   display: grid;
   gap: 0.8rem;
-  padding: clamp(1.1rem, 2vw, 1.4rem);
+  padding: 1.15rem 1.05rem;
+}
+
+.lab-story-pack-card p {
+  font-size: 0.93rem;
+  line-height: 1.45;
 }
 
 .lab-story-quote-board {
-  width: 100%;
+  width: min(100%, 40rem);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 0.8rem;
   align-content: center;
+  justify-self: center;
 }
 
 .lab-story-quote-card {
   display: grid;
   gap: 0.7rem;
-  min-height: 10.5rem;
+  min-height: 9.6rem;
   padding: 1rem;
   border: 1px solid color-mix(in oklch, var(--line) 76%, transparent);
   border-radius: 1.35rem;
@@ -495,45 +502,29 @@
 
 .lab-story-quote-head span {
   color: var(--quiet);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+}
+
+.lab-story-quote-head strong {
+  font-size: 0.97rem;
+  font-weight: 600;
+}
+
+.lab-story-quote-card p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 0.95rem;
+  line-height: 1.45;
 }
 
 .lab-story-interview-stage {
+  width: 100%;
   display: grid;
   gap: 0.8rem;
   align-content: center;
-}
-
-.lab-story-interview-card {
-  display: grid;
-  gap: 0.6rem;
-  padding: 0.85rem;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    background 180ms ease;
-}
-
-.lab-story-interview-card:hover,
-.lab-story-interview-card.active {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklch, var(--line-strong) 60%, var(--accent) 40%);
-  background: color-mix(in oklch, var(--surface-raised) 78%, var(--accent) 22%);
-}
-
-.lab-story-emotion-token {
-  width: 1.8rem;
-  height: 1.8rem;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--accent) 14%, transparent);
-  color: var(--text);
-  font-size: 0.68rem;
-  font-weight: 800;
+  justify-items: center;
 }
 
 .lab-story-aggregation-mark {
@@ -542,13 +533,14 @@
   display: grid;
   place-items: center;
   text-align: center;
+  padding-inline: 1rem;
 }
 
 .lab-story-aggregation-mark .lab-story-aggregation-summary {
-  width: min(100%, 32rem);
+  width: min(100%, 29rem);
   display: grid;
   gap: 0.7rem;
-  padding: 1.1rem;
+  padding: 1.15rem 1.1rem;
   overflow: hidden;
 }
 
@@ -593,12 +585,23 @@
 }
 
 .lab-story-panel h3 {
-  font-size: clamp(1.32rem, 2vw, 1.8rem);
-  line-height: 1.08;
+  font-size: clamp(1.18rem, 1.7vw, 1.5rem);
+  line-height: 1.12;
+}
+
+.lab-story-panel p {
+  font-size: 0.96rem;
+  line-height: 1.56;
 }
 
 .lab-story-panel strong {
   color: var(--text);
+}
+
+.lab-story-panel-copy > strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .lab-story-panel-facts {
@@ -612,12 +615,6 @@
   padding: 0.3rem 0.6rem;
   color: var(--muted);
   font-size: 0.8rem;
-}
-
-.lab-story-divergence-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
 }
 
 .lab-step-card {
@@ -1308,7 +1305,6 @@ a.source-tag:hover {
   .lab-story-canvas,
   .lab-story-panel,
   .lab-story-cluster-card,
-  .lab-story-interview-card,
   .lab-story-source-card {
     transform: none !important;
   }

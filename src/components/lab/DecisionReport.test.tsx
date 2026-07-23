@@ -156,8 +156,6 @@ describe("buildDecisionReportModel", () => {
     expect(model?.recommendation).toBe("Do not ship the message unchanged");
     expect(model?.metrics.find((metric) => metric.label === "Resistance")?.value).toBe("50%");
     expect(model?.divergences).toHaveLength(2);
-    expect(model?.risks).toEqual(["May assume all costs hit households immediately."]);
-    expect(model?.evidenceLine).toBe("1 live sources grounded this report.");
   });
 
   it("does not produce a report while aggregation is missing", () => {

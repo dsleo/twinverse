@@ -13,12 +13,9 @@ type ReportMetric = {
 export type DecisionReportModel = {
   recommendation: string;
   summary: string;
-  evidenceLine: string;
   metrics: ReportMetric[];
   divergences: AggregateReport["mainDivergences"];
   segments: AggregateReport["perSegmentSummary"];
-  risks: string[];
-  caveats: string[];
 };
 
 type StanceBucket = "support" | "resist" | "mixed";
@@ -44,10 +41,6 @@ function percent(count: number, total: number) {
     return "0%";
   }
   return `${Math.round((count / total) * 100)}%`;
-}
-
-function compactList(values: string[], maxItems: number) {
-  return values.map((value) => value.trim()).filter(Boolean).slice(0, maxItems);
 }
 
 function topBucketLabel(counts: Record<StanceBucket, number>) {
@@ -77,20 +70,6 @@ function recommendationFrom(counts: Record<StanceBucket, number>, total: number)
   return "Treat the reaction as unresolved";
 }
 
-function summarizeSourceCoverage(run: PersistedLabRun) {
-  const sources = run.retrieval?.sources ?? [];
-  if (sources.length === 0) {
-    return "No source stack attached to this run.";
-  }
-
-  const liveCount = sources.filter((source) => source.provenance === "live").length;
-  const fallbackCount = sources.length - liveCount;
-  if (fallbackCount === 0) {
-    return `${liveCount} live sources grounded this report.`;
-  }
-  return `${liveCount} live sources and ${fallbackCount} fallback signals grounded this report.`;
-}
-
 export function buildDecisionReportModel(run: PersistedLabRun): DecisionReportModel | null {
   const report = run.aggregateReport;
   if (!report) {
@@ -105,15 +84,9 @@ export function buildDecisionReportModel(run: PersistedLabRun): DecisionReportMo
   const total = run.reactions.length;
   const averageConfidence =
     total === 0 ? 0 : run.reactions.reduce((sum, reaction) => sum + reaction.confidence, 0) / total;
-  const misunderstandingRisks = compactList(
-    run.reactions.flatMap((reaction) => (reaction.misunderstanding ? [reaction.misunderstanding] : [])),
-    3,
-  );
-
   return {
     recommendation: recommendationFrom(counts, total),
     summary: report.overallPattern || report.executiveSummary,
-    evidenceLine: summarizeSourceCoverage(run),
     metrics: [
       {
         label: "Dominant read",
@@ -138,8 +111,6 @@ export function buildDecisionReportModel(run: PersistedLabRun): DecisionReportMo
     ],
     divergences: report.mainDivergences.slice(0, 2),
     segments: report.perSegmentSummary,
-    risks: misunderstandingRisks.length > 0 ? misunderstandingRisks : compactList(report.caveats, 2),
-    caveats: compactList(report.caveats, 2),
   };
 }
 
@@ -152,15 +123,11 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
   return (
     <section id="lab-decision-report" className="lab-card decision-report">
       <div className="section-heading section-heading-compact">
-        <div>
-          <div className="section-label">Decision report</div>
-          <h2>What to do with this run</h2>
-        </div>
+        <div className="section-label">Decision report</div>
       </div>
 
       <div className="decision-report-hero">
         <div>
-          <p className="decision-report-kicker">Recommended read</p>
           <h3>{model.recommendation}</h3>
           <p>{model.summary}</p>
         </div>
@@ -177,7 +144,7 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
         ))}
       </div>
 
-      <div className="decision-report-grid">
+      <div className="decision-report-grid decision-report-grid-single">
         <article className="decision-report-block">
           <div className="section-label">Main splits</div>
           {model.divergences.map((item) => (
@@ -188,14 +155,6 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
           ))}
         </article>
 
-        <article className="decision-report-block">
-          <div className="section-label">Watchouts</div>
-          <ul className="decision-list">
-            {model.risks.map((risk) => (
-              <li key={risk}>{risk}</li>
-            ))}
-          </ul>
-        </article>
       </div>
 
       <div className="decision-segment-strip" aria-label="Segment reads">
@@ -207,10 +166,6 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
           </article>
         ))}
       </div>
-
-      <p className="lab-warning">
-        {model.evidenceLine} {model.caveats.join(" ")}
-      </p>
     </section>
   );
 }

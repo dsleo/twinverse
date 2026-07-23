@@ -32,6 +32,7 @@ describe("persistence", () => {
     const entries = await readdir(path.join(dataDir, "lab-runs"));
     expect(entries.filter((entry) => entry.endsWith(".tmp"))).toEqual([]);
     expect(await readRun(run.id)).toMatchObject({ id: run.id, status: "running" });
+    expect((await readRun(run.id)).audienceGuidance).toEqual({ mode: "automatic", include: [], avoid: [], priorityConcerns: [] });
   });
 
   it("raises a corruption error for unreadable persisted run files", async () => {

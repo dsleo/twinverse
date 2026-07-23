@@ -159,6 +159,26 @@ describe("mapPopulationToPanel", () => {
     expect(unmatched.reasons).toContain("no_inclusion_match");
   });
 
+  it("applies guided inclusion filters as eligibility and avoids as a score penalty", () => {
+    const personas = [makePersona(1), makePersona(2)];
+    const frequencies = buildMetadataValueFrequencies(personas);
+    const segment = makeSegment({ inclusionTags: [{ family: "employment_class", values: ["retired"] }] });
+    const guidance = {
+      mode: "guided" as const,
+      include: [{ family: "employment_class" as const, values: ["retired"] }],
+      avoid: [{ family: "income_posture" as const, values: ["cost_sensitive"] }],
+      priorityConcerns: ["household costs"],
+    };
+
+    const retired = scorePersona(personas[1], segment, "france_general", frequencies, personas.length, guidance);
+    const nonRetired = scorePersona(personas[0], segment, "france_general", frequencies, personas.length, guidance);
+    const withoutAvoid = scorePersona(personas[1], segment, "france_general", frequencies, personas.length, { ...guidance, avoid: [] });
+
+    expect(retired.eligible).toBe(true);
+    expect(nonRetired.eligible).toBe(false);
+    expect(retired.total).toBeLessThan(withoutAvoid.total);
+  });
+
   it("applies exclusion precedence and keeps audience prior from outranking non-matches", () => {
     const personas = [
       makePersona(1, {

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { DecisionReport } from "./DecisionReport";
+import { AudienceBuilder } from "./AudienceBuilder";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
 import { TvAudienceResult } from "./TvAudienceResult";
 import { runModeLabels } from "../../lib/labAudience";
-import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
+import type { AudienceGuidance, AudiencePreset, DailyQuestionPreview, InputType, PersistedLabRun, PopulationSegmentDesign, RunMode } from "../../lib/labSchemas";
 
 type JumpCard = {
   id: string;
@@ -88,6 +89,9 @@ type LabPageClientProps = {
 export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClientProps) {
   const [mode, setMode] = useState<RunMode>(fixedMode ?? "manual");
   const [rawInput, setRawInput] = useState("Faut-il construire de nouvelles centrales nucléaires en France ?");
+  const [audiencePreset, setAudiencePreset] = useState<AudiencePreset>("france_general");
+  const [audienceGuidance, setAudienceGuidance] = useState<AudienceGuidance>({ mode: "automatic", include: [], avoid: [], priorityConcerns: [] });
+  const [approvedSegmentDesign, setApprovedSegmentDesign] = useState<PopulationSegmentDesign | undefined>();
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<PersistedLabRun | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -256,6 +260,9 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
           rawInput: mode === "manual" ? rawInput : undefined,
           inputType: isTvMode ? "other" : ("question" satisfies InputType),
           date: targetDate,
+          audiencePreset: mode === "manual" ? audiencePreset : undefined,
+          audienceGuidance: mode === "manual" ? audienceGuidance : undefined,
+          approvedSegmentDesign: mode === "manual" ? approvedSegmentDesign : undefined,
         }),
       });
 
@@ -354,7 +361,11 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const isRunActive = run?.status === "running";
   const submitDisabled =
     isRunActive ||
-    (mode === "manual" ? rawInput.trim().length < 10 : mode === "le_figaro_daily" ? isDailyQuestionLoading || !leFigaroAvailable : false);
+    (mode === "manual"
+      ? rawInput.trim().length < 10 || (audienceGuidance.mode === "guided" && !approvedSegmentDesign)
+      : mode === "le_figaro_daily"
+        ? isDailyQuestionLoading || !leFigaroAvailable
+        : false);
 
   return (
     <div className="lab-page page-shell">
@@ -457,7 +468,10 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             <textarea
               id="lab-input"
               value={rawInput}
-              onChange={(event) => setRawInput(event.target.value)}
+              onChange={(event) => {
+                setRawInput(event.target.value);
+                setApprovedSegmentDesign(undefined);
+              }}
               minLength={10}
               rows={5}
               aria-describedby="lab-input-error"
@@ -465,6 +479,22 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               placeholder="Paste a question, article, proposal, or speech"
             />
           )}
+
+          {mode === "manual" ? (
+            <AudienceBuilder
+              input={{ rawInput, inputType: "question" }}
+              audiencePreset={audiencePreset}
+              guidance={audienceGuidance}
+              approvedDesign={approvedSegmentDesign}
+              disabled={isRunActive}
+              onAudiencePresetChange={(value) => {
+                setAudiencePreset(value);
+                setApprovedSegmentDesign(undefined);
+              }}
+              onGuidanceChange={setAudienceGuidance}
+              onApprovedDesignChange={setApprovedSegmentDesign}
+            />
+          ) : null}
 
           <div className="lab-command-row">
             <button type="submit" className="accent-button" disabled={submitDisabled}>
@@ -548,6 +578,15 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <h2>{run.audiencePreset === "le_figaro_reader" ? "Reader-weighted segments" : "Question-driven segments"}</h2>
             </div>
           </div>
+          {run.audienceGuidance.mode === "guided" ? (
+            <details className="audience-definition">
+              <summary>Audience definition</summary>
+              {run.audienceGuidance.brief ? <p>{run.audienceGuidance.brief}</p> : null}
+              {run.audienceGuidance.include.length ? <p><strong>Must include:</strong> {run.audienceGuidance.include.map((filter) => `${filter.family.replaceAll("_", " ")}: ${filter.values.join(", ")}`).join(" · ")}</p> : null}
+              {run.audienceGuidance.avoid.length ? <p><strong>Avoid over-representing:</strong> {run.audienceGuidance.avoid.map((filter) => `${filter.family.replaceAll("_", " ")}: ${filter.values.join(", ")}`).join(" · ")}</p> : null}
+              {run.audienceGuidance.priorityConcerns.length ? <p><strong>Priority concerns:</strong> {run.audienceGuidance.priorityConcerns.join(" · ")}</p> : null}
+            </details>
+          ) : null}
           <div className="segment-explorer">
             <div className="segment-list" role="list">
               {run.populationMap.segments.map((segment) => {

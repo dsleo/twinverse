@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { type LabInput, providerDecisionSchema, type PopulationSegmentSpec, retrievalPlanSchema, type RetrievalPlan } from "../../lib/labSchemas";
+import { type AudienceGuidance, type LabInput, providerDecisionSchema, type PopulationSegmentSpec, retrievalPlanSchema, type RetrievalPlan } from "../../lib/labSchemas";
 import { logLabRun } from "./logging";
 import { callStructuredModel, type StructuredCallResult } from "./openaiStructured";
 import type { TokenUsage } from "./tokenAccounting";
@@ -18,7 +18,7 @@ type ResearchPlanResult = {
 export async function planSegmentResearch(
   input: LabInput,
   segments: PopulationSegmentSpec[],
-  options?: { runId?: string },
+  options?: { runId?: string; guidance?: AudienceGuidance },
 ): Promise<ResearchPlanResult> {
   if (options?.runId) {
     logLabRun(options.runId, "research-plan-start", {
@@ -41,6 +41,7 @@ export async function planSegmentResearch(
     {
       userQuestion: input.rawInput,
       segments: segments.map(({ id, label, summary, concerns, informationNeeds }) => ({ id, label, summary, concerns, informationNeeds })),
+      audiencePriorityConcerns: options?.guidance?.priorityConcerns ?? [],
       approvedProviders: ["wikipedia", "rss", "vie_publique", "data_gouv", "reddit"],
     },
     null,

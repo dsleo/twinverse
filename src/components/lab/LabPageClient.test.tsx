@@ -17,7 +17,27 @@ describe("LabPageClient", () => {
     expect(screen.queryByText("Choose the prompt source")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Paste a question/i)).toBeInTheDocument();
     expect(screen.queryByText(/Le Figaro du jour/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Segments and panel selection reflect a general France-wide audience mix\./i)).not.toBeInTheDocument();
+    expect(screen.getByText("Who should this represent?")).toBeInTheDocument();
+  });
+
+  it("opens guided audience controls only when requested", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("/api/lab/audience-options")) {
+          return { ok: true, json: async () => ({ taxonomy: { life_stage: ["midcareer"] } }) } as Response;
+        }
+        throw new Error(`Unexpected request: ${input}`);
+      }) as unknown as typeof fetch,
+    );
+
+    render(<LabPageClient fixedMode="manual" />);
+    expect(screen.queryByText("Priority concerns")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText("Guide the audience"));
+
+    expect(await screen.findByText("Priority concerns")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview audience" })).toBeInTheDocument();
   });
 
   it("renders the Le Figaro mode as a read-only daily question flow", async () => {

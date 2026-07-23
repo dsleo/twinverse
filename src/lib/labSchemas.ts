@@ -76,6 +76,15 @@ export const rankingSignalSchema = z.object({
 });
 export type RankingSignal = z.infer<typeof rankingSignalSchema>;
 
+export const audienceGuidanceSchema = z.object({
+  mode: z.enum(["automatic", "guided"]).default("automatic"),
+  brief: z.string().trim().min(1).max(360).optional(),
+  include: z.array(metadataTagFilterSchema).max(3).default([]),
+  avoid: z.array(metadataTagFilterSchema).max(3).default([]),
+  priorityConcerns: z.array(z.string().trim().min(1).max(100)).max(3).default([]),
+});
+export type AudienceGuidance = z.infer<typeof audienceGuidanceSchema>;
+
 export const personaAssignmentMetadataSchema = z.object({
   life_stage: z.string().min(1),
   household_type: z.string().min(1),
@@ -213,6 +222,14 @@ export const populationSegmentSpecSchema = z.object({
   rankingCriteria: z.array(z.string().min(1)).min(1),
 });
 export type PopulationSegmentSpec = z.infer<typeof populationSegmentSpecSchema>;
+
+export const populationSegmentDesignSchema = z.object({
+  promptSummary: z.string().min(1),
+  topicDimensions: z.array(z.string().min(1)).min(1),
+  globalRationale: z.string().min(1),
+  segments: z.array(populationSegmentSpecSchema).length(5),
+});
+export type PopulationSegmentDesign = z.infer<typeof populationSegmentDesignSchema>;
 
 export const assignedSegmentSchema = populationSegmentSpecSchema.extend({
   memberPersonaIds: z.array(z.string().min(1)).min(1),
@@ -360,6 +377,8 @@ export const persistedLabRunSchema = z.object({
   status: z.enum(["created", "running", "completed", "failed"]),
   mode: runModeSchema,
   audiencePreset: audiencePresetSchema,
+  audienceGuidance: audienceGuidanceSchema.default({ mode: "automatic", include: [], avoid: [], priorityConcerns: [] }),
+  approvedSegmentDesign: populationSegmentDesignSchema.optional(),
   input: labInputSchema,
   promptSnapshot: z.string().min(10),
   promptSource: promptSourceSchema.optional(),

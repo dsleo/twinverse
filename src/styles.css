@@ -40,6 +40,147 @@
   padding-top: 1rem;
 }
 
+.audience-builder {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.audience-builder legend {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0 var(--space-1);
+}
+
+.audience-builder-field {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.audience-builder-field small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.audience-mode-toggle,
+.audience-proposal-actions,
+.audience-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.audience-mode-toggle label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.audience-guidance-fields,
+.audience-proposal {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.audience-filter-picker,
+.audience-filter-columns,
+.audience-proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.audience-filter-actions {
+  align-self: end;
+}
+
+.audience-filter-list {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+}
+
+.audience-filter-list > strong {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.audience-filter-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.audience-filter-list button {
+  width: fit-content;
+  padding: 0.35rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-raised);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.audience-proposal {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.audience-proposal-grid {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.audience-proposal-grid article {
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+}
+
+.audience-proposal-grid p,
+.audience-proposal-grid small {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.audience-definition {
+  margin-bottom: var(--space-3);
+  color: var(--muted);
+}
+
+.audience-definition summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 750;
+}
+
+.audience-definition p {
+  margin: 0.65rem 0 0;
+}
+
+@media (max-width: 720px) {
+  .audience-filter-picker,
+  .audience-filter-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .lab-form {
   display: grid;
   gap: 0.9rem;

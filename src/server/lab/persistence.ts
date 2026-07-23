@@ -6,8 +6,10 @@ import { ZodError } from "zod";
 import {
   defaultRunSteps,
   persistedLabRunSchema,
+  type AudienceGuidance,
   type AudiencePreset,
   type LabInput,
+  type PopulationSegmentDesign,
   type PersistedLabRun,
   type PromptSource,
   type RunMode,
@@ -101,12 +103,16 @@ export async function createRunRecord({
   input,
   mode,
   audiencePreset,
+  audienceGuidance = { mode: "automatic", include: [], avoid: [], priorityConcerns: [] },
+  approvedSegmentDesign,
   promptSnapshot,
   promptSource,
 }: {
   input: LabInput;
   mode: RunMode;
   audiencePreset: AudiencePreset;
+  audienceGuidance?: AudienceGuidance;
+  approvedSegmentDesign?: PopulationSegmentDesign;
   promptSnapshot: string;
   promptSource?: PromptSource;
 }) {
@@ -119,6 +125,8 @@ export async function createRunRecord({
     status: "created",
     mode,
     audiencePreset,
+    audienceGuidance,
+    approvedSegmentDesign,
     input,
     promptSnapshot,
     promptSource,

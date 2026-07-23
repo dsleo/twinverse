@@ -5,7 +5,8 @@ import { buildContextPacks } from "./contextPacks";
 import { logLabRun, logLabStage, logLabTokenTotals } from "./logging";
 import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
-import { mapPopulationToPanel } from "./populationMapping";
+import { designPopulationSegments, mapPopulationToPanel } from "./populationMapping";
+import { planSegmentResearch } from "./researchPlanner";
 import { routeSourcesBySegment } from "./sourceRouting";
 import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
@@ -108,27 +109,35 @@ export async function executeLabRun(runId: string) {
 
   try {
     currentRun = await readRun(runId);
-    setStageStatus("retrieval", "running", {
-      summary: "Collecting live source signals from configured providers.",
-    });
-    await persistRun();
-
-    const retrievalTask = settleTask(retrieveSources(currentRun.input));
-
     setStageStatus("population_mapping", "running", {
-      summary: "Assigning the live persona sample to question-specific segments.",
+      summary: "Defining audience segments and mapping the persona sample.",
     });
     await persistRun();
 
     const cache = await loadPersonaSample();
-    const mapped = await mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset, { runId });
-    addTokenUsage(tokenTotals, mapped.tokenUsage);
+    const designed = await designPopulationSegments(currentRun.input, cache, currentRun.audiencePreset, { runId });
+    addTokenUsage(tokenTotals, designed.tokenUsage);
+    setStageStatus("retrieval", "running", { summary: "Planning and collecting source signals for the defined segments." });
+    await persistRun();
+    const researchPlanTask = settleTask(planSegmentResearch(currentRun.input, designed.data.segments, { runId }));
+    const mappingTask = settleTask(mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset, { runId, design: designed }));
+    const planned = await researchPlanTask;
+    if (!planned.ok) throw planned.error;
+    addTokenUsage(tokenTotals, planned.value.tokenUsage);
+    const retrievalTask = settleTask(retrieveSources(currentRun.input, planned.value.plan));
+    const mappingResult = await mappingTask;
+    if (!mappingResult.ok) throw mappingResult.error;
+    const mapped = mappingResult.value;
     currentRun = {
       ...currentRun,
       panelSampleVersion: cache.sampleVersion,
       panel: mapped.panel,
       populationMap: mapped.assignment,
-      rawModelDiagnostics: [...currentRun.rawModelDiagnostics, { stage: "population_mapping", ...mapped.diagnostics }],
+      rawModelDiagnostics: [
+        ...currentRun.rawModelDiagnostics,
+        { stage: "population_mapping", ...mapped.diagnostics },
+        { stage: "retrieval", ...planned.value.diagnostics },
+      ],
     };
     setStageStatus("population_mapping", "completed", {
       summary: `Built 5 prompt-specific segments from ${cache.sampleSize} cached dataset personas.`,
@@ -174,7 +183,7 @@ export async function executeLabRun(runId: string) {
         panel.filter((persona) => segment.representativePersonaIds.includes(persona.id)),
       ]),
     );
-    const sourcesBySegment = routeSourcesBySegment(populationMap.segments, personasBySegment, retrievalState.sources);
+    const sourcesBySegment = routeSourcesBySegment(populationMap.segments, personasBySegment, retrievalState.sources, retrievalState.plan);
     const contextPackResults = await buildContextPacks(
       currentRun!.input,
       populationMap.segments,

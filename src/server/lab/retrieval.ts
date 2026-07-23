@@ -73,6 +73,7 @@ function providerDecision(provider: Provider, query: string, reason: string, tri
   return {
     provider,
     query,
+    segmentIds: [],
     reason,
     triggeredBy,
     confidence,
@@ -652,8 +653,8 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
   }
 }
 
-export async function retrieveSources(input: LabInput) {
-  const plan = buildRetrievalPlan(input);
+export async function retrieveSources(input: LabInput, suppliedPlan?: RetrievalPlan) {
+  const plan = suppliedPlan ?? buildRetrievalPlan(input);
   const queries = plan.providerDecisions;
   const results = await Promise.all(queries.map((query) => runProvider(query.provider, query.query)));
   const sources = results

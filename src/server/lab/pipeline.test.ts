@@ -13,6 +13,12 @@ vi.mock("./personaSample", () => ({
 }));
 
 vi.mock("./populationMapping", () => ({
+  designPopulationSegments: vi.fn(async () => ({
+    data: {
+      promptSummary: "Nuclear build-out in France", topicDimensions: ["energy"], globalRationale: "Synthetic rationale",
+      segments: Array.from({ length: 5 }, (_, index) => ({ id: `segment-${index}`, label: `Segment ${index + 1}`, summary: `Summary ${index + 1}`, concerns: ["cost"], informationNeeds: ["timeline"], inclusionTags: [{ family: "employment_class", values: ["working_class"] }], exclusionTags: [], preferredDiversityHints: [], rankingSignals: [], rankingCriteria: ["cost"] })),
+    }, diagnostics: { name: "PopulationMapperAgent", model: "test", outputText: "{}" }, tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
+  })),
   mapPopulationToPanel: vi.fn(async () => ({
     assignment: {
       promptSummary: "Nuclear build-out in France",
@@ -71,6 +77,13 @@ vi.mock("./populationMapping", () => ({
     })),
     diagnostics: { name: "PopulationMapperAgent", model: "test", outputText: "{}" },
     tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
+  })),
+}));
+
+vi.mock("./researchPlanner", () => ({
+  planSegmentResearch: vi.fn(async () => ({
+    plan: { inputTerms: ["nuclear"], providerDecisions: [{ provider: "wikipedia", query: "nucleaire", reason: "background", triggeredBy: ["segment-0"], confidence: 0.8 }], skippedProviders: [], queryVariants: ["nucleaire"] },
+    diagnostics: { name: "ResearchPlannerAgent", model: "test", outputText: "{}" }, tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
   })),
 }));
 

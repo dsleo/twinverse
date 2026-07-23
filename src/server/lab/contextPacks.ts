@@ -52,10 +52,10 @@ export async function buildContextPacks(
   }
 
   const system = [
-    "You build compact context packs for a French synthetic-audience simulation.",
+    "You build compact context packs for a synthetic-audience simulation.",
     "Return concise segment briefings grounded only in the supplied prompt, personas, and sources.",
     "Do not editorialize. Do not mention being an AI system.",
-    "Return one context pack per segment in the same order as the input segments.",
+    "Use only the sources supplied to each segment; do not assume every person consumed them. Return one context pack per segment in the same order as the input segments.",
   ].join(" ");
 
   const user = JSON.stringify(

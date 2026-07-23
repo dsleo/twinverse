@@ -80,6 +80,12 @@ export type PopulationMappingResult = {
   tokenUsage: TokenUsage;
 };
 
+export type SegmentDesignResult = {
+  data: z.infer<typeof populationMapSchema>;
+  diagnostics: PopulationMappingResult["diagnostics"];
+  tokenUsage: TokenUsage;
+};
+
 type MetadataValueFrequencies = Partial<Record<keyof PersonaAssignmentMetadata, Map<string, number>>>;
 
 const DIVERSITY_FAMILIES: Array<keyof PersonaAssignmentMetadata> = [
@@ -331,11 +337,32 @@ function choosePanel(scoredBySegment: Array<{ segment: PopulationSegmentSpec; ca
   return Array.from(selected.values()).slice(0, 20);
 }
 
-export async function mapPopulationToPanel(
+export async function designPopulationSegments(
   input: LabInput,
   cache: PersonaCache,
   audiencePreset: AudiencePreset = "france_general",
   options?: { runId?: string },
+): Promise<SegmentDesignResult> {
+  const audience = audiencePresetSchema.parse(audiencePreset);
+  const taxonomy = metadataTaxonomy(cache.personas);
+  const system = [
+    "You are an audience segmentation analyst.",
+    "Return exactly five population segments.",
+    `Audience lens: ${audiencePresetDescription(audience)}.`,
+    "Every segment must use inclusionTags and exclusionTags that map directly onto the provided metadata families and values.",
+    "Do not invent families that are not present in the taxonomy.",
+    "All output must be compact and concrete.",
+  ].join(" ");
+  const user = JSON.stringify({ input, audiencePreset: audience, audienceDescription: audiencePresetDescription(audience), promptDimensions: promptDimensions(input.rawInput), metadataTaxonomy: taxonomy }, null, 2);
+  const mapped = await callStructuredModel({ schema: populationMapSchema, schemaName: "population_segments", stageName: "PopulationMapperAgent", system, user, runId: options?.runId, traceLabel: "population_mapping" });
+  return { data: mapped.data, diagnostics: mapped.diagnostics, tokenUsage: mapped.tokenUsage };
+}
+
+export async function mapPopulationToPanel(
+  input: LabInput,
+  cache: PersonaCache,
+  audiencePreset: AudiencePreset = "france_general",
+  options?: { runId?: string; design?: SegmentDesignResult },
 ): Promise<PopulationMappingResult> {
   const audience = audiencePresetSchema.parse(audiencePreset);
   if (options?.runId) {
@@ -345,56 +372,7 @@ export async function mapPopulationToPanel(
     });
   }
 
-  const taxonomy = metadataTaxonomy(cache.personas);
-  const promptDimensionList = promptDimensions(input.rawInput);
-  const system = [
-    "You are a French public-opinion segmentation analyst.",
-    "Return exactly five population segments.",
-    `Audience lens: ${audiencePresetDescription(audience)}.`,
-    "Every segment must use inclusionTags and exclusionTags that map directly onto the provided metadata families and values.",
-    "Do not invent families that are not present in the taxonomy.",
-    "Favor segments that reflect who is materially affected, who bears cost/risk, who depends on services, who evaluates implementation detail, and who filters through trust/convenience.",
-    "All output must be compact and concrete.",
-  ].join(" ");
-  const user = JSON.stringify(
-    {
-      input,
-      audiencePreset: audience,
-      audienceDescription: audiencePresetDescription(audience),
-      promptDimensions: promptDimensionList,
-      metadataTaxonomy: taxonomy,
-      instructions: {
-        includeFamilies: Object.keys(taxonomy),
-        returnFields: [
-          "promptSummary",
-          "topicDimensions",
-          "globalRationale",
-          "segments[].id",
-          "segments[].label",
-          "segments[].summary",
-          "segments[].concerns",
-          "segments[].informationNeeds",
-          "segments[].inclusionTags",
-          "segments[].exclusionTags",
-          "segments[].preferredDiversityHints",
-          "segments[].rankingSignals",
-          "segments[].rankingCriteria",
-        ],
-      },
-    },
-    null,
-    2,
-  );
-
-  const mapped = await callStructuredModel({
-    schema: populationMapSchema,
-    schemaName: "population_segments",
-    stageName: "PopulationMapperAgent",
-    system,
-    user,
-    runId: options?.runId,
-    traceLabel: "population_mapping",
-  });
+  const mapped = options?.design ?? await designPopulationSegments(input, cache, audience, options);
 
   const frequencies = buildMetadataValueFrequencies(cache.personas);
   const scoredBySegment = mapped.data.segments.map((segment) => ({

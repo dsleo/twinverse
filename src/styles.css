@@ -284,6 +284,123 @@ a.source-tag:hover {
   color: var(--muted);
 }
 
+.evidence-plan {
+  display: grid;
+  gap: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: color-mix(in oklch, var(--surface-raised) 82%, var(--bg) 18%);
+  padding: 1rem;
+}
+
+.evidence-plan-header,
+.claim-legend,
+.source-supports,
+.source-provider-line,
+.source-score-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.evidence-plan-header {
+  justify-content: space-between;
+}
+
+.evidence-plan-header p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+}
+
+.provider-decision-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.provider-decision {
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: color-mix(in oklch, var(--surface) 88%, var(--text) 12%);
+  padding: 0.8rem;
+}
+
+.provider-decision p,
+.provider-decision small {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--muted);
+}
+
+.claim-legend {
+  margin-top: 0.2rem;
+}
+
+.claim-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.claim-chip-observed {
+  border-color: color-mix(in oklch, var(--support) 42%, var(--line) 58%);
+  color: var(--support);
+}
+
+.claim-chip-simulated {
+  border-color: color-mix(in oklch, var(--accent) 42%, var(--line) 58%);
+  color: var(--accent);
+}
+
+.claim-chip-inferred {
+  border-color: color-mix(in oklch, var(--undecided) 42%, var(--line) 58%);
+  color: var(--undecided);
+}
+
+.source-provider-line {
+  color: var(--quiet);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.source-explanation {
+  display: grid;
+  gap: 0.75rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+
+.source-explanation strong {
+  font-size: 0.86rem;
+}
+
+.source-explanation ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+}
+
+.source-explanation li + li {
+  margin-top: 0.25rem;
+}
+
+.source-score-grid span {
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--quiet);
+  font-size: 0.78rem;
+}
+
 .segment-explorer {
   display: grid;
   gap: 1rem;

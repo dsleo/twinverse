@@ -241,6 +241,55 @@ export const providerOutcomeSchema = z.object({
 });
 export type ProviderOutcome = z.infer<typeof providerOutcomeSchema>;
 
+export const claimTypeSchema = z.enum(["observed", "simulated", "inferred"]);
+export type ClaimType = z.infer<typeof claimTypeSchema>;
+
+export const providerDecisionSchema = z.object({
+  provider: providerSchema,
+  query: z.string().min(1),
+  reason: z.string().min(1),
+  triggeredBy: z.array(z.string().min(1)).min(1),
+  confidence: z.number().min(0).max(1),
+});
+export type ProviderDecision = z.infer<typeof providerDecisionSchema>;
+
+export const retrievalPlanSchema = z.object({
+  inputTerms: z.array(z.string().min(1)).min(1),
+  providerDecisions: z.array(providerDecisionSchema).min(1),
+  skippedProviders: z.array(
+    z.object({
+      provider: z.string().min(1),
+      reason: z.string().min(1),
+    }),
+  ).default([]),
+  queryVariants: z.array(z.string().min(1)).min(1),
+});
+export type RetrievalPlan = z.infer<typeof retrievalPlanSchema>;
+
+export const sourceSelectionExplanationSchema = z.object({
+  sourceId: z.string().min(1),
+  scoreBreakdown: z.object({
+    relevance: z.number().min(0).max(1),
+    recency: z.number().min(0).max(1),
+    authority: z.number().min(0).max(1),
+    fallbackPenalty: z.number().min(0).max(1),
+  }),
+  selectedBecause: z.array(z.string().min(1)).min(1),
+  limitations: z.array(z.string().min(1)).default([]),
+  supports: z.array(z.string().min(1)).default([]),
+});
+export type SourceSelectionExplanation = z.infer<typeof sourceSelectionExplanationSchema>;
+
+export const evidenceClaimSchema = z.object({
+  id: z.string().min(1),
+  claimType: claimTypeSchema,
+  text: z.string().min(1),
+  sourceIds: z.array(z.string().min(1)).default([]),
+  runArtifactIds: z.array(z.string().min(1)).default([]),
+  confidence: z.number().min(0).max(1),
+});
+export type EvidenceClaim = z.infer<typeof evidenceClaimSchema>;
+
 export const retrievedSourceSchema = z.object({
   id: z.string().min(1),
   provider: providerSchema,
@@ -259,8 +308,11 @@ export type RetrievedSource = z.infer<typeof retrievedSourceSchema>;
 
 export const retrievalResultSchema = z.object({
   searchPhrase: z.string().min(1),
+  plan: retrievalPlanSchema.optional(),
   outcomes: z.array(providerOutcomeSchema).min(1),
   sources: z.array(retrievedSourceSchema).min(1),
+  sourceExplanations: z.array(sourceSelectionExplanationSchema).default([]),
+  evidenceClaims: z.array(evidenceClaimSchema).default([]),
 });
 export type RetrievalResult = z.infer<typeof retrievalResultSchema>;
 

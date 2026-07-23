@@ -1,6 +1,17 @@
 import "server-only";
 
-import type { LabInput, Provider, ProviderOutcome, ProviderOutcomeStatus, RetrievedSource, RetrievalResult } from "../../lib/labSchemas";
+import type {
+  EvidenceClaim,
+  LabInput,
+  Provider,
+  ProviderDecision,
+  ProviderOutcome,
+  ProviderOutcomeStatus,
+  RetrievedSource,
+  RetrievalPlan,
+  RetrievalResult,
+  SourceSelectionExplanation,
+} from "../../lib/labSchemas";
 import { retrievalResultSchema } from "../../lib/labSchemas";
 
 type ProviderResult = {
@@ -8,10 +19,7 @@ type ProviderResult = {
   sources: RetrievedSource[];
 };
 
-type QueryPlan = Array<{
-  provider: Provider;
-  query: string;
-}>;
+type QueryPlan = ProviderDecision[];
 
 const searchStopwords = new Set(["faut", "pour", "avec", "dans", "contre", "entre", "question", "article", "france"]);
 
@@ -33,6 +41,7 @@ function normalizeText(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -48,15 +57,80 @@ function buildSearchPhrase(input: string) {
   return keywords.length > 0 ? keywords.join(" ") : input;
 }
 
-export function buildQueries(input: LabInput): QueryPlan {
+function comparableToken(token: string) {
+  return token.length > 4 && token.endsWith("s") ? token.slice(0, -1) : token;
+}
+
+function inputTerms(input: string) {
+  return normalizeText(input)
+    .split(" ")
+    .filter((token) => token.length >= 4 && !searchStopwords.has(token))
+    .slice(0, 8);
+}
+
+function providerDecision(provider: Provider, query: string, reason: string, triggeredBy: string[], confidence: number): ProviderDecision {
+  return {
+    provider,
+    query,
+    reason,
+    triggeredBy,
+    confidence,
+  };
+}
+
+export function buildRetrievalPlan(input: LabInput): RetrievalPlan {
   const searchPhrase = buildSearchPhrase(input.rawInput);
-  return [
-    { provider: "wikipedia", query: input.rawInput },
-    { provider: "rss", query: searchPhrase },
-    { provider: "reddit", query: searchPhrase },
-    { provider: "vie_publique", query: searchPhrase },
-    { provider: "data_gouv", query: searchPhrase },
+  const terms = inputTerms(input.rawInput);
+  const triggerTerms = terms.length > 0 ? terms.slice(0, 4) : [searchPhrase];
+  const promptKind = input.inputType.replace("_", " ");
+  const decisions: ProviderDecision[] = [
+    providerDecision(
+      "wikipedia",
+      input.rawInput,
+      "Adds stable background context so the model does not reason from a bare prompt.",
+      ["prompt", promptKind],
+      0.72,
+    ),
+    providerDecision(
+      "rss",
+      searchPhrase,
+      "Checks recent media framing around the prompt and captures how the topic is being narrated now.",
+      triggerTerms,
+      0.82,
+    ),
+    providerDecision(
+      "reddit",
+      searchPhrase,
+      "Samples public-discourse language and objections; it is useful for framing, not representativeness.",
+      triggerTerms,
+      0.58,
+    ),
+    providerDecision(
+      "vie_publique",
+      searchPhrase,
+      "Looks for official French public-policy context when the prompt may involve institutions, regulation, or public services.",
+      triggerTerms,
+      0.76,
+    ),
+    providerDecision(
+      "data_gouv",
+      searchPhrase,
+      "Looks for official datasets that can ground the topic in public data rather than commentary alone.",
+      triggerTerms,
+      0.74,
+    ),
   ];
+
+  return {
+    inputTerms: terms.length > 0 ? terms : [searchPhrase],
+    providerDecisions: decisions,
+    skippedProviders: [],
+    queryVariants: Array.from(new Set(decisions.map((decision) => decision.query))),
+  };
+}
+
+export function buildQueries(input: LabInput): QueryPlan {
+  return buildRetrievalPlan(input).providerDecisions;
 }
 
 class ProviderResponseParseError extends Error {
@@ -171,8 +245,8 @@ function recencyScore(publishedAt?: string) {
 }
 
 function overlapScore(query: string, text: string) {
-  const queryTokens = new Set(normalizeText(query).split(" ").filter(Boolean));
-  const textTokens = new Set(normalizeText(text).split(" ").filter(Boolean));
+  const queryTokens = new Set(normalizeText(query).split(" ").filter(Boolean).map(comparableToken));
+  const textTokens = new Set(normalizeText(text).split(" ").filter(Boolean).map(comparableToken));
   let overlap = 0;
 
   for (const token of queryTokens) {
@@ -186,6 +260,102 @@ function overlapScore(query: string, text: string) {
 
 function officialScore(query: string, text: string, publishedAt: string | undefined, boost: number) {
   return clamp(boost + overlapScore(query, text) * 0.42 + recencyScore(publishedAt), 0.35, 0.96);
+}
+
+function authorityScore(source: RetrievedSource) {
+  if (source.provider === "vie_publique" || source.provider === "data_gouv") {
+    return 0.95;
+  }
+  if (source.provider === "wikipedia") {
+    return 0.72;
+  }
+  if (source.provider === "rss") {
+    return 0.64;
+  }
+  return 0.38;
+}
+
+function supportLabel(source: RetrievedSource) {
+  if (source.provenance === "fallback") {
+    return "Retrieval limitation and caveat";
+  }
+  if (source.provider === "vie_publique" || source.provider === "data_gouv") {
+    return "Observed official context";
+  }
+  if (source.provider === "rss") {
+    return "Observed media framing";
+  }
+  if (source.provider === "reddit") {
+    return "Observed public-discourse language";
+  }
+  return "Observed background context";
+}
+
+function sourceLimitations(source: RetrievedSource) {
+  const limitations: string[] = [];
+  if (source.provenance === "fallback") {
+    limitations.push(source.failureReason ?? "Fallback context was used because the provider did not return a live usable source.");
+  }
+  if (source.provider === "reddit") {
+    limitations.push("Public-discourse signal, not representative evidence.");
+  }
+  if (source.provider === "rss") {
+    limitations.push("Media framing signal; freshness and editorial angle may affect salience.");
+  }
+  if (source.provider === "wikipedia") {
+    limitations.push("Background reference, not a current measurement.");
+  }
+  if (!source.publishedAt && source.provenance === "live") {
+    limitations.push("No publication date was available from the provider.");
+  }
+  return limitations;
+}
+
+function explainSourceSelection(source: RetrievedSource): SourceSelectionExplanation {
+  const relevance = source.relevanceScore;
+  const recency = recencyScore(source.publishedAt);
+  const authority = authorityScore(source);
+  const fallbackPenalty = source.provenance === "fallback" ? 0.65 : 0;
+  const selectedBecause = [
+    source.provenance === "live"
+      ? `Matched the query "${source.query}" with a relevance score of ${Math.round(source.relevanceScore * 100)}%.`
+      : "Included as a fallback so the run keeps an explicit record of missing or failed retrieval.",
+  ];
+
+  if (authority >= 0.9) {
+    selectedBecause.push("Official source with high provenance value.");
+  } else if (source.provider === "reddit") {
+    selectedBecause.push("Useful for public language, objections, and framing signals.");
+  } else if (source.provider === "rss") {
+    selectedBecause.push("Useful for current media salience.");
+  }
+
+  return {
+    sourceId: source.id,
+    scoreBreakdown: {
+      relevance,
+      recency,
+      authority,
+      fallbackPenalty,
+    },
+    selectedBecause,
+    limitations: sourceLimitations(source),
+    supports: [supportLabel(source)],
+  };
+}
+
+function buildEvidenceClaims(sources: RetrievedSource[]): EvidenceClaim[] {
+  return sources.slice(0, 8).map((source) => ({
+    id: `claim-${source.id}`,
+    claimType: "observed",
+    text:
+      source.provenance === "live"
+        ? `${source.title} was retrieved as ${supportLabel(source).toLowerCase()}.`
+        : `${source.sourceName ?? source.provider} did not provide a live source and contributed a retrieval caveat.`,
+    sourceIds: [source.id],
+    runArtifactIds: [],
+    confidence: source.provenance === "live" ? clamp(source.relevanceScore * authorityScore(source), 0.2, 0.95) : 0.25,
+  }));
 }
 
 async function fetchJson(url: string, provider: Provider) {
@@ -482,7 +652,8 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
 }
 
 export async function retrieveSources(input: LabInput) {
-  const queries = buildQueries(input);
+  const plan = buildRetrievalPlan(input);
+  const queries = plan.providerDecisions;
   const results = await Promise.all(queries.map((query) => runProvider(query.provider, query.query)));
   const sources = results
     .flatMap((result) => result.sources)
@@ -490,7 +661,10 @@ export async function retrieveSources(input: LabInput) {
 
   return retrievalResultSchema.parse({
     searchPhrase: buildSearchPhrase(input.rawInput),
+    plan,
     outcomes: results.map((result) => result.outcome),
     sources,
+    sourceExplanations: sources.map(explainSourceSelection),
+    evidenceClaims: buildEvidenceClaims(sources),
   });
 }

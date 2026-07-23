@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildQueries, retrieveSources } from "./retrieval";
+import { buildQueries, buildRetrievalPlan, retrieveSources } from "./retrieval";
 
 const originalFetch = globalThis.fetch;
 
@@ -63,6 +63,9 @@ describe("retrieveSources", () => {
     expect(result.sources.some((source) => source.provider === "rss" && source.provenance === "live")).toBe(true);
     expect(result.sources.some((source) => source.provider === "vie_publique" && source.provenance === "fallback")).toBe(true);
     expect(result.sources.some((source) => source.provider === "data_gouv" && source.provenance === "fallback")).toBe(true);
+    expect(result.plan?.providerDecisions.find((decision) => decision.provider === "reddit")?.reason).toMatch(/discourse/i);
+    expect(result.sourceExplanations).toHaveLength(result.sources.length);
+    expect(result.evidenceClaims.every((claim) => claim.claimType === "observed")).toBe(true);
   });
 
   it("classifies unreadable provider payloads as parse failures", async () => {
@@ -193,5 +196,19 @@ describe("retrieveSources", () => {
         inputType: "question",
       }).map((query) => query.provider),
     ).toEqual(["wikipedia", "rss", "reddit", "vie_publique", "data_gouv"]);
+  });
+
+  it("explains provider decisions before retrieval runs", () => {
+    const plan = buildRetrievalPlan({
+      rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?",
+      inputType: "question",
+    });
+
+    expect(plan.inputTerms).toEqual(expect.arrayContaining(["construire", "nouvelles", "centrales"]));
+    expect(plan.providerDecisions.find((decision) => decision.provider === "data_gouv")).toMatchObject({
+      query: "construire nouvelles centrales nucleaires",
+    });
+    expect(plan.providerDecisions.every((decision) => decision.reason.length > 10)).toBe(true);
+    expect(plan.queryVariants).toContain("construire nouvelles centrales nucleaires");
   });
 });

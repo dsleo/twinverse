@@ -34,6 +34,15 @@ export type StructuredCallResult<T> = {
 
 let cachedClient: OpenAI | null = null;
 
+export function responseSchemaName(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^[_-]+|[_-]+$/g, "")
+    .slice(0, 64);
+  return normalized || "structured_output";
+}
+
 function getClient() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is missing. Add it to .env.local before running the real lab pipeline.");
@@ -82,6 +91,7 @@ export async function callStructuredModel<T>({
 }: StructuredCallParams<T>): Promise<StructuredCallResult<T>> {
   const client = getClient();
   const model = getModel();
+  const responseFormatName = responseSchemaName(schemaName);
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -100,7 +110,7 @@ export async function callStructuredModel<T>({
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        response_format: zodResponseFormat(schema, schemaName),
+        response_format: zodResponseFormat(schema, responseFormatName),
       });
 
       const message = completion.choices[0]?.message;

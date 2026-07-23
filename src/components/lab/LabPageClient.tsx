@@ -673,16 +673,6 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <h2>Why these sources were selected</h2>
             </div>
           </summary>
-          {run.retrieval.plan ? (
-            <div className="evidence-plan">
-              <div className="evidence-plan-header">
-                <div>
-                  <div className="section-label">Query plan</div>
-                  <p>{retainedSourceGroups.length} retained source {retainedSourceGroups.length === 1 ? "provider" : "providers"}</p>
-                </div>
-              </div>
-            </div>
-          ) : null}
           {retainedSourceGroups.length === 0 ? <p className="source-reason">No live source was retained for this run.</p> : null}
           <div className="source-provenance-grid">
             {retainedSourceGroups.map((group) => (
@@ -697,7 +687,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                 </summary>
                 <div className="source-item-list">
                   {group.sources.map((source) => {
-                    const showTitle = !source.sourceName || source.title.trim().toLocaleLowerCase() !== source.sourceName.trim().toLocaleLowerCase();
+                    const showTitle = !source.sourceName || !source.title.trim().toLocaleLowerCase().includes(source.sourceName.trim().toLocaleLowerCase());
                     return (
                       <article key={source.id} className="source-item">
                         {showTitle ? <h4>{source.title}</h4> : null}

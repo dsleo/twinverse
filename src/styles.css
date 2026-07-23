@@ -284,30 +284,11 @@ a.source-tag:hover {
   color: var(--muted);
 }
 
-.evidence-plan {
-  display: grid;
-  gap: 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 1.1rem;
-  background: color-mix(in oklch, var(--surface-raised) 82%, var(--bg) 18%);
-  padding: 1rem;
-}
-
-.evidence-plan-header,
 .source-provider-line {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
   align-items: center;
-}
-
-.evidence-plan-header {
-  justify-content: space-between;
-}
-
-.evidence-plan-header p {
-  margin: 0.15rem 0 0;
-  color: var(--muted);
 }
 
 .claim-chip {

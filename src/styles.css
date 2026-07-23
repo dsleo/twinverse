@@ -350,6 +350,126 @@ a.source-tag:hover {
   line-height: 1.45;
 }
 
+.decision-report {
+  display: grid;
+  gap: var(--space-3);
+  border-color: color-mix(in oklch, var(--line-strong) 72%, var(--accent) 28%);
+  background: linear-gradient(180deg, color-mix(in oklch, var(--surface-raised) 84%, var(--accent) 16%), var(--surface));
+}
+
+.decision-report-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.decision-report-hero h3 {
+  margin: 0.2rem 0 0.55rem;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.55rem, 2.8vw, 2.35rem);
+  line-height: 1.05;
+}
+
+.decision-report-hero p {
+  max-width: 72ch;
+  color: var(--muted);
+}
+
+.decision-report-kicker,
+.decision-metric span,
+.decision-segment span {
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.decision-metric-grid,
+.decision-report-grid,
+.decision-segment-strip {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.decision-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.decision-metric,
+.decision-report-block,
+.decision-segment {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: color-mix(in oklch, var(--surface) 90%, var(--bg) 10%);
+  padding: 0.95rem;
+}
+
+.decision-metric {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.decision-metric strong {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.decision-metric p,
+.decision-report-row p,
+.decision-segment p,
+.decision-list {
+  color: var(--muted);
+}
+
+.decision-report-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
+}
+
+.decision-report-block {
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+}
+
+.decision-report-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.decision-report-row h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.decision-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.decision-list li + li {
+  margin-top: 0.55rem;
+}
+
+.decision-segment-strip {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.decision-segment {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.decision-segment strong {
+  font-size: 0.95rem;
+}
+
+.decision-segment p {
+  font-size: 0.86rem;
+}
+
 .source-reason {
   color: var(--quiet);
   font-size: 0.92rem;
@@ -842,5 +962,12 @@ a.source-tag:hover {
     min-width: 9.5rem;
     min-height: 4rem;
     padding-inline: 1rem;
+  }
+
+  .decision-report-hero,
+  .decision-report-grid,
+  .decision-metric-grid,
+  .decision-segment-strip {
+    grid-template-columns: 1fr;
   }
 }

@@ -241,9 +241,6 @@ export const providerOutcomeSchema = z.object({
 });
 export type ProviderOutcome = z.infer<typeof providerOutcomeSchema>;
 
-export const claimTypeSchema = z.enum(["observed", "simulated", "inferred"]);
-export type ClaimType = z.infer<typeof claimTypeSchema>;
-
 export const providerDecisionSchema = z.object({
   provider: providerSchema,
   query: z.string().min(1),
@@ -267,30 +264,6 @@ export const retrievalPlanSchema = z.object({
 });
 export type RetrievalPlan = z.infer<typeof retrievalPlanSchema>;
 
-export const sourceSelectionExplanationSchema = z.object({
-  sourceId: z.string().min(1),
-  scoreBreakdown: z.object({
-    relevance: z.number().min(0).max(1),
-    recency: z.number().min(0).max(1),
-    authority: z.number().min(0).max(1),
-    fallbackPenalty: z.number().min(0).max(1),
-  }),
-  selectedBecause: z.array(z.string().min(1)).min(1),
-  limitations: z.array(z.string().min(1)).default([]),
-  supports: z.array(z.string().min(1)).default([]),
-});
-export type SourceSelectionExplanation = z.infer<typeof sourceSelectionExplanationSchema>;
-
-export const evidenceClaimSchema = z.object({
-  id: z.string().min(1),
-  claimType: claimTypeSchema,
-  text: z.string().min(1),
-  sourceIds: z.array(z.string().min(1)).default([]),
-  runArtifactIds: z.array(z.string().min(1)).default([]),
-  confidence: z.number().min(0).max(1),
-});
-export type EvidenceClaim = z.infer<typeof evidenceClaimSchema>;
-
 export const retrievedSourceSchema = z.object({
   id: z.string().min(1),
   provider: providerSchema,
@@ -312,8 +285,6 @@ export const retrievalResultSchema = z.object({
   plan: retrievalPlanSchema.optional(),
   outcomes: z.array(providerOutcomeSchema).min(1),
   sources: z.array(retrievedSourceSchema).default([]),
-  sourceExplanations: z.array(sourceSelectionExplanationSchema).default([]),
-  evidenceClaims: z.array(evidenceClaimSchema).default([]),
 });
 export type RetrievalResult = z.infer<typeof retrievalResultSchema>;
 

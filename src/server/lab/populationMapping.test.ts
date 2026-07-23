@@ -110,6 +110,7 @@ function makePersona(index: number, overrides: Partial<PersonaCache["personas"][
       issue_salience_tags: ["cost_of_living", "public_services"],
     },
     ...overrides,
+    tvPreferenceDescription: overrides.tvPreferenceDescription ?? "",
   };
 }
 

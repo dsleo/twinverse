@@ -3,7 +3,9 @@ import { runBatchTvEvaluation, writeBatchResults } from "./batchTvEvaluation";
 import { resolve } from "path";
 import { existsSync } from "fs";
 
-describe("TV Batch Evaluation", () => {
+const describeBatch = process.env.RUN_TV_BATCH_EVALUATION === "true" ? describe : describe.skip;
+
+describeBatch("TV Batch Evaluation", () => {
   it("runs batch prediction on all backtest dates", async () => {
     console.log("\n=== STARTING BATCH TV AUDIENCE EVALUATION ===\n");
     console.log("This will run predictions on all 14 dates in the backtest dataset.");

@@ -18,9 +18,22 @@ const contextPackOutputSchema = contextPackSchema.omit({
   supportingSourceIds: true,
 });
 
-const batchedContextPackOutputSchema = z.object({
-  contextPacks: z.array(contextPackOutputSchema).length(5),
-});
+export function batchedContextPackOutputSchema(segmentIds: [string, ...string[]]) {
+  return z.object({
+    contextPacks: z.array(
+      contextPackOutputSchema.extend({ segmentId: z.enum(segmentIds) }),
+    ).length(segmentIds.length),
+  });
+}
+
+function combineTokenUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    totalTokens: left.totalTokens + right.totalTokens,
+    estimated: left.estimated || right.estimated,
+  };
+}
 
 export type ContextPackBatchResult = {
   packs: ContextPack[];
@@ -51,6 +64,12 @@ export async function buildContextPacks(
     });
   }
 
+  if (segments.length === 0) {
+    throw new Error("Context pack batch has no segments to build.");
+  }
+
+  const requestedSegmentIds = segments.map((segment) => segment.id) as [string, ...string[]];
+  const outputSchema = batchedContextPackOutputSchema(requestedSegmentIds);
   const system = [
     "You build compact context packs for a synthetic-audience simulation.",
     "Return concise segment briefings grounded only in the supplied prompt, personas, and sources.",
@@ -86,42 +105,48 @@ export async function buildContextPacks(
     2,
   );
 
-  const result = await callStructuredModel({
-    schema: batchedContextPackOutputSchema,
-    schemaName: "context_packs_batch",
-    stageName: "ContextPackBuilderAgentBatch",
-    system,
-    user,
-    runId: options?.runId,
-    traceLabel: "context_packs_batch",
-  });
+  let tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimated: false };
+  let lastError: Error | null = null;
 
-  const packsBySegmentId = new Map(
-    result.data.contextPacks.map((pack) => [
-      pack.segmentId,
-      contextPackSchema.parse({
-        id: `context-pack-${pack.segmentId}`,
-        supportingSourceIds: (sourcesBySegment.get(pack.segmentId) ?? []).map((source) => source.id),
-        ...pack,
-      }),
-    ]),
-  );
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const attemptUser = attempt === 1
+      ? user
+      : `${user}\n\nCorrection: return exactly one context pack for each of these segmentIds: ${requestedSegmentIds.join(", ")}.`;
+    const result = await callStructuredModel({
+      schema: outputSchema,
+      schemaName: "context_packs_batch",
+      stageName: "ContextPackBuilderAgentBatch",
+      system,
+      user: attemptUser,
+      runId: options?.runId,
+      traceLabel: `context_packs_batch:attempt-${attempt}`,
+    });
+    tokenUsage = combineTokenUsage(tokenUsage, result.tokenUsage);
 
-  const packs = segments.map((segment) => {
-    const pack = packsBySegmentId.get(segment.id);
-    if (!pack) {
-      throw new Error(`Context pack batch missing segment ${segment.id}.`);
+    const packsBySegmentId = new Map(
+      result.data.contextPacks.map((pack) => [
+        pack.segmentId,
+        contextPackSchema.parse({
+          id: `context-pack-${pack.segmentId}`,
+          supportingSourceIds: (sourcesBySegment.get(pack.segmentId) ?? []).map((source) => source.id),
+          ...pack,
+        }),
+      ]),
+    );
+    const packs = segments.map((segment) => packsBySegmentId.get(segment.id));
+    if (packsBySegmentId.size === segments.length && packs.every((pack): pack is ContextPack => Boolean(pack))) {
+      return { packs, diagnostics: result.diagnostics, tokenUsage };
     }
-    return pack;
-  });
 
-  if (packsBySegmentId.size !== segments.length) {
-    throw new Error(`Context pack batch returned ${packsBySegmentId.size} packs for ${segments.length} segments.`);
+    lastError = new Error(`Context pack batch did not return one pack for each requested segment.`);
+    if (options?.runId) {
+      logLabRun(options.runId, "context-pack-batch-invalid", {
+        attempt,
+        expectedSegments: requestedSegmentIds.length,
+        uniqueSegments: packsBySegmentId.size,
+      });
+    }
   }
 
-  return {
-    packs,
-    diagnostics: result.diagnostics,
-    tokenUsage: result.tokenUsage,
-  };
+  throw lastError ?? new Error("Context pack batch failed validation.");
 }

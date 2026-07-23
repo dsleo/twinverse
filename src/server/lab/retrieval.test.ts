@@ -14,6 +14,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   globalThis.fetch = originalFetch;
 });
 
@@ -64,8 +65,6 @@ describe("retrieveSources", () => {
     expect(result.sources.some((source) => source.provider === "vie_publique")).toBe(false);
     expect(result.sources.some((source) => source.provider === "data_gouv")).toBe(false);
     expect(result.plan?.providerDecisions.find((decision) => decision.provider === "reddit")?.reason).toMatch(/discourse/i);
-    expect(result.sourceExplanations).toHaveLength(result.sources.length);
-    expect(result.evidenceClaims.every((claim) => claim.claimType === "observed")).toBe(true);
   });
 
   it("classifies unreadable provider payloads as parse failures", async () => {
@@ -80,7 +79,7 @@ describe("retrieveSources", () => {
             json: async () => {
               throw new SyntaxError("bad json");
             },
-          } as Response;
+          } as unknown as Response;
         }
         if (url.includes("news.google.com/rss/search")) {
           return jsonResponse(
@@ -187,6 +186,53 @@ describe("retrieveSources", () => {
     expect(result.sources.some((source) => source.provider === "vie_publique" && source.provenance === "live")).toBe(true);
     expect(result.sources.some((source) => source.provider === "data_gouv" && source.provenance === "live")).toBe(true);
     expect(result.sources.some((source) => source.provider === "data_gouv" && source.title === "Comptes du tourisme")).toBe(false);
+  });
+
+  it("does not retain a generic Vie publique feed item without a topic match", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(
+        "<rss><channel><item><title>Politique publique : bilan annuel</title><link>https://www.vie-publique.fr/article/bilan</link><description>Les services publics et les moyens de l'État.</description><pubDate>Thu, 05 Jun 2026 08:00:00 GMT</pubDate></item></channel></rss>",
+      )) as unknown as typeof fetch,
+    );
+
+    const result = await retrieveSources(
+      { rawInput: "La lutte contre les incendies est-elle suffisamment financée ?", inputType: "question" },
+      {
+        inputTerms: ["incendies"],
+        providerDecisions: [{ provider: "vie_publique", query: "politique publique incendies", segmentIds: ["segment-1"], reason: "Institutional fire policy.", triggeredBy: ["segment-1"], confidence: 0.8 }],
+        skippedProviders: [],
+        queryVariants: ["politique publique incendies"],
+      },
+    );
+
+    expect(result.sources).toHaveLength(0);
+    expect(result.outcomes[0]?.status).toBe("no_relevant_results");
+  });
+
+  it("records a provider timeout instead of leaving retrieval pending", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      })) as unknown as typeof fetch,
+    );
+
+    const resultPromise = retrieveSources(
+      { rawInput: "La lutte contre les incendies est-elle suffisamment financée ?", inputType: "question" },
+      {
+        inputTerms: ["incendies"],
+        providerDecisions: [{ provider: "wikipedia", query: "incendies", segmentIds: ["segment-1"], reason: "Background fire context.", triggeredBy: ["segment-1"], confidence: 0.8 }],
+        skippedProviders: [],
+        queryVariants: ["incendies"],
+      },
+    );
+    await vi.advanceTimersByTimeAsync(8_000);
+    const result = await resultPromise;
+
+    expect(result.outcomes[0]).toMatchObject({ provider: "wikipedia", status: "upstream_failure", sourceCount: 0 });
+    expect(result.outcomes[0]?.message).toMatch(/did not respond within 8 seconds/i);
   });
 
   it("builds the replacement provider query plan", () => {

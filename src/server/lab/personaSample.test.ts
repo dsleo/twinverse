@@ -66,6 +66,7 @@ describe("personaSample metadata derivation", () => {
       housingStatus: "mixed_housing",
       mobilityProfile: "mixed_mobility",
       urbanicity: "mixed_urbanicity",
+      tvPreferenceDescription: "",
       traits: [],
       concerns: [],
       profileNarrative:

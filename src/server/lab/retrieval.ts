@@ -1,7 +1,6 @@
 import "server-only";
 
 import type {
-  EvidenceClaim,
   LabInput,
   Provider,
   ProviderDecision,
@@ -9,8 +8,6 @@ import type {
   ProviderOutcomeStatus,
   RetrievedSource,
   RetrievalPlan,
-  RetrievalResult,
-  SourceSelectionExplanation,
 } from "../../lib/labSchemas";
 import { retrievalResultSchema } from "../../lib/labSchemas";
 import { logLabRun } from "./logging";
@@ -23,6 +20,8 @@ type ProviderResult = {
 type QueryPlan = ProviderDecision[];
 
 const searchStopwords = new Set(["faut", "pour", "avec", "dans", "contre", "entre", "question", "article", "france", "craignez", "leurs", "perdent", "devons", "doit"]);
+const genericInstitutionalTerms = new Set(["france", "francais", "francaise", "francaises", "politique", "politiques", "public", "publique", "moyen", "moyens", "lutte", "service", "services"]);
+const PROVIDER_TIMEOUT_MS = 8_000;
 
 function slugify(value: string) {
   return value
@@ -172,36 +171,6 @@ function providerLabel(provider: Provider) {
   }
 }
 
-function fallbackTitle(provider: Provider) {
-  switch (provider) {
-    case "data_gouv":
-      return "Official dataset context";
-    case "reddit":
-      return "Public discourse signal";
-    case "rss":
-      return "Recent media framing";
-    case "vie_publique":
-      return "Official policy context";
-    case "wikipedia":
-      return "Background reference";
-  }
-}
-
-function fallbackSource(provider: Provider, query: string, failureReason: string): RetrievedSource {
-  return {
-    id: `${provider}-fallback-${slugify(query)}`,
-    provider,
-    provenance: "fallback",
-    title: fallbackTitle(provider),
-    snippet: failureReason,
-    failureReason,
-    query,
-    relevanceScore: 0.35,
-    tags: ["fallback"],
-    sourceName: providerLabel(provider),
-  };
-}
-
 function xmlValue(xml: string, tag: string) {
   return xml.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1]?.trim();
 }
@@ -261,114 +230,46 @@ function overlapScore(query: string, text: string) {
   return overlap / Math.max(queryTokens.size, 1);
 }
 
+function hasDistinctiveQueryMatch(query: string, text: string) {
+  const textTokens = new Set(normalizeText(text).split(" ").filter(Boolean).map(comparableToken));
+  return normalizeText(query)
+    .split(" ")
+    .map(comparableToken)
+    .some((term) => term.length >= 7 && !genericInstitutionalTerms.has(term) && textTokens.has(term));
+}
+
 function officialScore(query: string, text: string, publishedAt: string | undefined, boost: number) {
   return clamp(boost + overlapScore(query, text) * 0.42 + recencyScore(publishedAt), 0.35, 0.96);
 }
 
-function authorityScore(source: RetrievedSource) {
-  if (source.provider === "vie_publique" || source.provider === "data_gouv") {
-    return 0.95;
+class ProviderTimeoutError extends Error {
+  constructor(provider: Provider) {
+    super(`${providerLabel(provider)} did not respond within ${PROVIDER_TIMEOUT_MS / 1_000} seconds.`);
+    this.name = "ProviderTimeoutError";
   }
-  if (source.provider === "wikipedia") {
-    return 0.72;
-  }
-  if (source.provider === "rss") {
-    return 0.64;
-  }
-  return 0.38;
 }
 
-function supportLabel(source: RetrievedSource) {
-  if (source.provenance === "fallback") {
-    return "Retrieval limitation and caveat";
+async function fetchWithTimeout(url: string, init: RequestInit, provider: Provider) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new ProviderTimeoutError(provider);
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  if (source.provider === "vie_publique" || source.provider === "data_gouv") {
-    return "Observed official context";
-  }
-  if (source.provider === "rss") {
-    return "Observed media framing";
-  }
-  if (source.provider === "reddit") {
-    return "Observed public-discourse language";
-  }
-  return "Observed background context";
-}
-
-function sourceLimitations(source: RetrievedSource) {
-  const limitations: string[] = [];
-  if (source.provenance === "fallback") {
-    limitations.push(source.failureReason ?? "Fallback context was used because the provider did not return a live usable source.");
-  }
-  if (source.provider === "reddit") {
-    limitations.push("Public-discourse signal, not representative evidence.");
-  }
-  if (source.provider === "rss") {
-    limitations.push("Media framing signal; freshness and editorial angle may affect salience.");
-  }
-  if (source.provider === "wikipedia") {
-    limitations.push("Background reference, not a current measurement.");
-  }
-  if (!source.publishedAt && source.provenance === "live") {
-    limitations.push("No publication date was available from the provider.");
-  }
-  return limitations;
-}
-
-function explainSourceSelection(source: RetrievedSource): SourceSelectionExplanation {
-  const relevance = source.relevanceScore;
-  const recency = recencyScore(source.publishedAt);
-  const authority = authorityScore(source);
-  const fallbackPenalty = source.provenance === "fallback" ? 0.65 : 0;
-  const selectedBecause = [
-    source.provenance === "live"
-      ? `Matched the query "${source.query}" with a relevance score of ${Math.round(source.relevanceScore * 100)}%.`
-      : "Included as a fallback so the run keeps an explicit record of missing or failed retrieval.",
-  ];
-
-  if (authority >= 0.9) {
-    selectedBecause.push("Official source with high provenance value.");
-  } else if (source.provider === "reddit") {
-    selectedBecause.push("Useful for public language, objections, and framing signals.");
-  } else if (source.provider === "rss") {
-    selectedBecause.push("Useful for current media salience.");
-  }
-
-  return {
-    sourceId: source.id,
-    scoreBreakdown: {
-      relevance,
-      recency,
-      authority,
-      fallbackPenalty,
-    },
-    selectedBecause,
-    limitations: sourceLimitations(source),
-    supports: [supportLabel(source)],
-  };
-}
-
-function buildEvidenceClaims(sources: RetrievedSource[]): EvidenceClaim[] {
-  return sources.slice(0, 8).map((source) => ({
-    id: `claim-${source.id}`,
-    claimType: "observed",
-    text:
-      source.provenance === "live"
-        ? `${source.title} was retrieved as ${supportLabel(source).toLowerCase()}.`
-        : `${source.sourceName ?? source.provider} did not provide a live source and contributed a retrieval caveat.`,
-    sourceIds: [source.id],
-    runArtifactIds: [],
-    confidence: source.provenance === "live" ? clamp(source.relevanceScore * authorityScore(source), 0.2, 0.95) : 0.25,
-  }));
 }
 
 async function fetchJson(url: string, provider: Provider) {
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       "user-agent": "tweenverse-lab/2.0",
       accept: "application/json,text/plain,*/*",
     },
     cache: "no-store",
-  });
+  }, provider);
 
   if (!response.ok) {
     const status = response.status;
@@ -384,13 +285,13 @@ async function fetchJson(url: string, provider: Provider) {
 }
 
 async function fetchText(url: string, provider: Provider, accept: string) {
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       "user-agent": "tweenverse-lab/2.0",
       accept,
     },
     cache: "no-store",
-  });
+  }, provider);
 
   if (!response.ok) {
     const status = response.status;
@@ -541,7 +442,7 @@ async function viePubliqueSources(query: string) {
         tags: ["official", "policy", "france"],
       } satisfies RetrievedSource;
     })
-    .filter((source) => overlapScore(query, `${source.title} ${source.snippet}`) >= 0.2)
+    .filter((source) => hasDistinctiveQueryMatch(query, `${source.title} ${source.snippet}`))
     .sort((a, b) => b.relevanceScore - a.relevanceScore || publishedTime(b.publishedAt) - publishedTime(a.publishedAt))
     .slice(0, 3);
 }
@@ -686,8 +587,6 @@ export async function retrieveSources(input: LabInput, suppliedPlan?: RetrievalP
     plan,
     outcomes: results.map((result) => result.outcome),
     sources,
-    sourceExplanations: sources.map(explainSourceSelection),
-    evidenceClaims: buildEvidenceClaims(sources),
   });
   if (options?.runId) {
     logLabRun(options.runId, "source-retrieval-complete", {

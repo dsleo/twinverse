@@ -11,7 +11,9 @@ type ReportMetric = {
 };
 
 export type DecisionReportModel = {
-  summary: string;
+  title: string;
+  lead: string;
+  detail: string[];
   metrics: ReportMetric[];
   divergences: AggregateReport["mainDivergences"];
   segments: AggregateReport["perSegmentSummary"];
@@ -25,7 +27,9 @@ const stanceBucketLabels: Record<StanceBucket, string> = {
   mixed: "Mixed",
 };
 
-function stanceBucket(stance: PersistedLabRun["reactions"][number]["stance"]): StanceBucket {
+function stanceBucket(
+  stance: PersistedLabRun["reactions"][number]["stance"],
+): StanceBucket {
   if (stance === "support" || stance === "strong_support") {
     return "support";
   }
@@ -48,22 +52,56 @@ function topBucketLabel(counts: Record<StanceBucket, number>) {
   return stanceBucketLabels[entries[0][0]];
 }
 
-export function buildDecisionReportModel(run: PersistedLabRun): DecisionReportModel | null {
+function reportTitle(audience: PersistedLabRun["audiencePreset"]) {
+  switch (audience) {
+    case "le_figaro_reader":
+      return "What Le Figaro readers take from this question";
+    case "france_tv_viewer":
+      return "What French TV viewers take from this question";
+    default:
+      return "What the France-wide panel takes from this question";
+  }
+}
+
+function summarySentences(value: string) {
+  const sentences =
+    value
+      .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+      ?.map((sentence) => sentence.trim())
+      .filter(Boolean) ?? [];
+  return sentences.length ? sentences : [value];
+}
+
+export function buildDecisionReportModel(
+  run: PersistedLabRun,
+): DecisionReportModel | null {
   const report = run.aggregateReport;
   if (!report) {
     return null;
   }
 
-  const counts: Record<StanceBucket, number> = { support: 0, resist: 0, mixed: 0 };
+  const counts: Record<StanceBucket, number> = {
+    support: 0,
+    resist: 0,
+    mixed: 0,
+  };
   for (const reaction of run.reactions) {
     counts[stanceBucket(reaction.stance)] += 1;
   }
 
   const total = run.reactions.length;
   const averageConfidence =
-    total === 0 ? 0 : run.reactions.reduce((sum, reaction) => sum + reaction.confidence, 0) / total;
+    total === 0
+      ? 0
+      : run.reactions.reduce((sum, reaction) => sum + reaction.confidence, 0) /
+        total;
+  const summary = summarySentences(
+    report.overallPattern || report.executiveSummary,
+  );
   return {
-    summary: report.overallPattern || report.executiveSummary,
+    title: reportTitle(run.audiencePreset),
+    lead: summary[0],
+    detail: summary.slice(1),
     metrics: [
       {
         label: "Dominant read",
@@ -100,29 +138,36 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
   return (
     <section id="lab-decision-report" className="lab-card decision-report">
       <div className="section-heading section-heading-compact">
-        <div className="section-label">Decision report</div>
+        <div className="section-label">Audience readout</div>
       </div>
 
       <div className="decision-report-hero">
         <div>
-          <h3>Takeaway from this query report</h3>
-          <p>{model.summary}</p>
+          <h3>{model.title}</h3>
+          <p className="decision-report-lead">{model.lead}</p>
+          {model.detail.length ? (
+            <details className="decision-summary-more">
+              <summary>Read the full synthesis</summary>
+              {model.detail.map((paragraph, index) => (
+                <p key={`${index}-${paragraph}`}>{paragraph}</p>
+              ))}
+            </details>
+          ) : null}
         </div>
-      </div>
-
-      <div className="decision-metric-grid">
-        {model.metrics.map((metric) => (
-          <article key={metric.label} className="decision-metric">
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <p>{metric.note}</p>
-          </article>
-        ))}
+        <div className="decision-metric-grid" aria-label="At a glance">
+          {model.metrics.map((metric) => (
+            <article key={metric.label} className="decision-metric">
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <p>{metric.note}</p>
+            </article>
+          ))}
+        </div>
       </div>
 
       <div className="decision-report-grid decision-report-grid-single">
         <article className="decision-report-block">
-          <div className="section-label">Main splits</div>
+          <div className="section-label">What divides the audience</div>
           {model.divergences.map((item) => (
             <div key={item.title} className="decision-report-row">
               <h3>{item.title}</h3>
@@ -130,7 +175,6 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
             </div>
           ))}
         </article>
-
       </div>
 
       <div className="decision-segment-strip" aria-label="Segment reads">

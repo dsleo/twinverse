@@ -473,7 +473,7 @@ a.source-tag:hover {
 
 .decision-report-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
   align-items: start;
   gap: var(--space-3);
   padding-bottom: var(--space-3);
@@ -490,6 +490,30 @@ a.source-tag:hover {
 .decision-report-hero p {
   max-width: 72ch;
   color: var(--muted);
+}
+
+.decision-report-lead {
+  max-width: 54ch;
+  font-size: clamp(1.02rem, 1.35vw, 1.18rem);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.decision-summary-more {
+  margin-top: 0.85rem;
+  color: var(--muted);
+}
+
+.decision-summary-more summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.decision-summary-more p {
+  margin: 0.7rem 0 0;
 }
 
 .decision-report-kicker,
@@ -510,6 +534,7 @@ a.source-tag:hover {
 
 .decision-metric-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-self: stretch;
 }
 
 .decision-metric,
@@ -524,6 +549,10 @@ a.source-tag:hover {
 .decision-metric {
   display: grid;
   gap: 0.35rem;
+}
+
+.decision-report-hero .decision-metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .decision-metric strong {

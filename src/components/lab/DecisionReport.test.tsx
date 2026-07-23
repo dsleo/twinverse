@@ -155,6 +155,10 @@ describe("buildDecisionReportModel", () => {
 
     expect(model?.metrics.find((metric) => metric.label === "Resistance")?.value).toBe("50%");
     expect(model?.divergences).toHaveLength(2);
+    expect(model?.title).toBe(
+      "What the France-wide panel takes from this question",
+    );
+    expect(model?.lead).toBe("Resistance and uncertainty outweigh support.");
   });
 
   it("does not produce a report while aggregation is missing", () => {

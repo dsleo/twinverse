@@ -248,7 +248,7 @@ export const providerDecisionSchema = z.object({
   provider: providerSchema,
   query: z.string().min(1),
   segmentIds: z.array(z.string().min(1)).default([]),
-  reason: z.string().min(1),
+  reason: z.string().min(1).max(120),
   triggeredBy: z.array(z.string().min(1)).min(1),
   confidence: z.number().min(0).max(1),
 });

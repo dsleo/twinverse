@@ -34,7 +34,7 @@ export async function planSegmentResearch(
     "Reuse a search when the same information is relevant to multiple segments; never duplicate a provider/query pair.",
     "Use wikipedia only for stable concepts, rss for current reporting, vie_publique for institutional context, data_gouv for official datasets, and reddit only for public-discourse language.",
     "Do not query every provider by default. Use concise faithful search queries, not raw conversational questions.",
-    "Each task must include the segmentIds it is intended to inform, a concise reason, and the triggering segment concerns. Maximum six tasks and at most two RSS tasks. Return structured tasks only.",
+    "Each task must include the segmentIds it is intended to inform, a reason of at most 12 words describing what the provider helps establish, and the triggering segment concerns. Reasons must be terse noun phrases, not instructions or full sentences. Maximum six tasks and at most two RSS tasks. Return structured tasks only.",
   ].join(" ");
   const user = JSON.stringify(
     {

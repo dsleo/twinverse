@@ -45,28 +45,23 @@ function percentLabel(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
-function claimTypeLabel(type: "observed" | "simulated" | "inferred") {
-  switch (type) {
-    case "observed":
-      return "Observed source";
-    case "simulated":
-      return "Simulated response";
-    case "inferred":
-      return "Analyst inference";
+function providerLabel(provider: string) {
+  switch (provider) {
+    case "data_gouv":
+      return "data.gouv.fr";
+    case "vie_publique":
+      return "Vie publique";
+    case "rss":
+      return "Google News";
+    case "reddit":
+      return "Reddit";
+    default:
+      return "Wikipedia";
   }
 }
 
-function providerTone(provider: string) {
-  if (provider === "data_gouv" || provider === "vie_publique") {
-    return "Official";
-  }
-  if (provider === "reddit") {
-    return "Discourse";
-  }
-  if (provider === "rss") {
-    return "Media";
-  }
-  return "Background";
+function compactText(value: string, maximum = 112) {
+  return value.length > maximum ? `${value.slice(0, maximum - 1).trimEnd()}…` : value;
 }
 
 function activeStage(run: PersistedLabRun | null) {
@@ -282,11 +277,31 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const selectedReaction = run?.reactions.find((reaction) => `${reaction.segmentId}-${reaction.personaId}` === selectedReactionId) ?? null;
   const selectedPersona = run?.panel.find((persona) => persona.id === selectedReaction?.personaId) ?? null;
   const selectedPack = run?.contextPacks.find((pack) => pack.id === selectedReaction?.contextPackId) ?? null;
-  const sourceExplanationsById = useMemo(
-    () => new Map((run?.retrieval?.sourceExplanations ?? []).map((explanation) => [explanation.sourceId, explanation])),
-    [run?.retrieval?.sourceExplanations],
-  );
   const sourcesById = useMemo(() => new Map((run?.retrieval?.sources ?? []).map((source) => [source.id, source])), [run?.retrieval?.sources]);
+  const retainedSourceGroups = useMemo(() => {
+    const sources = (run?.retrieval?.sources ?? []).filter((source) => source.provenance === "live");
+    const decisions = run?.retrieval?.plan?.providerDecisions;
+    if (decisions) {
+      return decisions
+        .map((decision) => ({
+          key: `${decision.provider}:${decision.query}`,
+          provider: decision.provider,
+          reason: decision.reason,
+          sources: sources.filter((source) => source.provider === decision.provider && source.query === decision.query),
+        }))
+        .filter((group) => group.sources.length > 0);
+    }
+
+    return Array.from(
+      sources.reduce((groups, source) => {
+        const key = `${source.provider}:${source.query}`;
+        const group = groups.get(key) ?? { key, provider: source.provider, reason: undefined, sources: [] as typeof sources };
+        group.sources.push(source);
+        groups.set(key, group);
+        return groups;
+      }, new Map<string, { key: string; provider: string; reason: string | undefined; sources: typeof sources }>()),
+    ).map(([, group]) => group);
+  }, [run?.retrieval]);
   const selectedSegmentSources = selectedSegmentPack?.supportingSourceIds.map((sourceId) => sourcesById.get(sourceId)).filter((source): source is NonNullable<typeof source> => Boolean(source)) ?? [];
   const segmentSamplePersonas = selectedSegment
     ? selectedSegment.representativePersonaIds
@@ -663,112 +678,46 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <div className="evidence-plan-header">
                 <div>
                   <div className="section-label">Query plan</div>
-                  <p>{run.retrieval.plan.inputTerms.join(", ")}</p>
+                  <p>{retainedSourceGroups.length} retained source {retainedSourceGroups.length === 1 ? "provider" : "providers"}</p>
                 </div>
-                <span className="source-tag">
-                  {run.retrieval.plan.queryVariants.length} query variant{run.retrieval.plan.queryVariants.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="provider-decision-grid">
-                {run.retrieval.plan.providerDecisions.map((decision) => (
-                  <article key={decision.provider} className="provider-decision">
-                    <div className="card-topline">
-                      <strong>{decision.provider.replace("_", ".")}</strong>
-                      <span>{percentLabel(decision.confidence)}</span>
-                    </div>
-                    <p>{decision.reason}</p>
-                    <small>Query: {decision.query}</small>
-                  </article>
-                ))}
               </div>
             </div>
           ) : null}
-          <div className="provider-decision-grid" aria-label="Provider attempts">
-            {run.retrieval.outcomes.map((outcome) => (
-              <article key={outcome.provider} className="provider-decision">
-                <div className="card-topline">
-                  <strong>{outcome.provider.replace("_", ".")}</strong>
-                  <span>{outcome.status.replaceAll("_", " ")}</span>
-                </div>
-                <small>Query: {outcome.query}</small>
-                <p>{outcome.message}</p>
-              </article>
-            ))}
-          </div>
-          {run.retrieval.evidenceClaims.length ? (
-            <div className="claim-legend" aria-label="Evidence claim types">
-              {(["observed", "simulated", "inferred"] as const).map((type) => (
-                <span key={type} className={`claim-chip claim-chip-${type}`}>
-                  {claimTypeLabel(type)}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {run.retrieval.sources.length === 0 ? <p className="source-reason">No provider returned a usable source. See each provider attempt above for the exact failure.</p> : null}
+          {retainedSourceGroups.length === 0 ? <p className="source-reason">No live source was retained for this run.</p> : null}
           <div className="source-provenance-grid">
-            {run.retrieval.sources.map((source) => {
-              const explanation = sourceExplanationsById.get(source.id);
-              return (
-                <article key={source.id} className="source-row">
-                  <div className="source-row-topline">
-                    <div style={{ minWidth: 0 }}>
-                      <div className="source-provider-line">
-                        <span>{providerTone(source.provider)}</span>
-                        <span>{source.provider.replace("_", ".")}</span>
-                      </div>
-                      <h3>{source.title}</h3>
-                    </div>
-                    <span className={`status-pill ${source.provenance === "live" ? "status-complete" : ""}`}>{source.provenance}</span>
+            {retainedSourceGroups.map((group) => (
+              <details key={group.key} className="source-row source-group">
+                <summary className="source-group-summary">
+                  <div>
+                    <div className="source-provider-line">Retained source</div>
+                    <h3>{providerLabel(group.provider)}</h3>
+                    {group.reason ? <p>{compactText(group.reason)}</p> : null}
                   </div>
-                  {source.sourceName ? (
-                    source.url ? (
-                      <a className="source-tag source-link" href={source.url} target="_blank" rel="noreferrer">
-                        <span>{source.sourceName}</span>
-                        <small style={{ marginLeft: "4px" }}>↗</small>
-                      </a>
-                    ) : (
-                      <span className="source-tag">{source.sourceName}</span>
-                    )
-                  ) : null}
-                  <p>{source.snippet}</p>
-                  {explanation ? (
-                    <div className="source-explanation">
-                      <div>
-                        <strong>Why selected</strong>
-                        <ul>
-                          {explanation.selectedBecause.map((reason) => (
-                            <li key={reason}>{reason}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="source-score-grid">
-                        <span>Relevance {percentLabel(explanation.scoreBreakdown.relevance)}</span>
-                        <span>Authority {percentLabel(explanation.scoreBreakdown.authority)}</span>
-                        <span>Recency {percentLabel(explanation.scoreBreakdown.recency)}</span>
-                      </div>
-                      {explanation.supports.length ? (
-                        <div className="source-supports">
-                          {explanation.supports.map((support) => (
-                            <span key={support} className="claim-chip claim-chip-observed">
-                              {support}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      {explanation.limitations.length ? (
-                        <p className="source-reason">
-                          <strong>Limit:</strong> {explanation.limitations.join(" ")}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : source.failureReason ? (
-                    <p className="source-reason">
-                      <strong>Reason:</strong> {source.failureReason}
-                    </p>
-                  ) : null}
-                </article>
-              );
-            })}
+                  <span className="source-tag">{group.sources.length} item{group.sources.length === 1 ? "" : "s"}</span>
+                </summary>
+                <div className="source-item-list">
+                  {group.sources.map((source) => {
+                    const showTitle = !source.sourceName || source.title.trim().toLocaleLowerCase() !== source.sourceName.trim().toLocaleLowerCase();
+                    return (
+                      <article key={source.id} className="source-item">
+                        {showTitle ? <h4>{source.title}</h4> : null}
+                        {source.sourceName ? (
+                          source.url ? (
+                            <a className="source-tag source-link" href={source.url} target="_blank" rel="noreferrer">
+                              <span>{source.sourceName}</span>
+                              <small style={{ marginLeft: "4px" }}>↗</small>
+                            </a>
+                          ) : (
+                            <span className="source-tag">{source.sourceName}</span>
+                          )
+                        ) : null}
+                        <p>{source.snippet}</p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </details>
+            ))}
           </div>
         </details>
       ) : null}

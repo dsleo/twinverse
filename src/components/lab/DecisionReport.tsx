@@ -11,7 +11,6 @@ type ReportMetric = {
 };
 
 export type DecisionReportModel = {
-  recommendation: string;
   summary: string;
   metrics: ReportMetric[];
   divergences: AggregateReport["mainDivergences"];
@@ -49,27 +48,6 @@ function topBucketLabel(counts: Record<StanceBucket, number>) {
   return stanceBucketLabels[entries[0][0]];
 }
 
-function recommendationFrom(counts: Record<StanceBucket, number>, total: number) {
-  if (total === 0) {
-    return "No decision signal yet";
-  }
-
-  const supportShare = counts.support / total;
-  const resistanceShare = counts.resist / total;
-  const mixedShare = counts.mixed / total;
-
-  if (resistanceShare >= 0.45) {
-    return "Do not ship the message unchanged";
-  }
-  if (mixedShare + resistanceShare >= 0.5) {
-    return "Refine the framing before acting";
-  }
-  if (supportShare >= 0.55) {
-    return "Promising, but validate the weak spots";
-  }
-  return "Treat the reaction as unresolved";
-}
-
 export function buildDecisionReportModel(run: PersistedLabRun): DecisionReportModel | null {
   const report = run.aggregateReport;
   if (!report) {
@@ -85,7 +63,6 @@ export function buildDecisionReportModel(run: PersistedLabRun): DecisionReportMo
   const averageConfidence =
     total === 0 ? 0 : run.reactions.reduce((sum, reaction) => sum + reaction.confidence, 0) / total;
   return {
-    recommendation: recommendationFrom(counts, total),
     summary: report.overallPattern || report.executiveSummary,
     metrics: [
       {
@@ -128,10 +105,9 @@ export function DecisionReport({ run }: { run: PersistedLabRun }) {
 
       <div className="decision-report-hero">
         <div>
-          <h3>{model.recommendation}</h3>
+          <h3>Takeaway from this query report</h3>
           <p>{model.summary}</p>
         </div>
-        <span className="status-pill status-complete">Synthetic simulation</span>
       </div>
 
       <div className="decision-metric-grid">

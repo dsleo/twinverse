@@ -153,7 +153,6 @@ describe("buildDecisionReportModel", () => {
   it("compresses aggregate output into an actionable report model", () => {
     const model = buildDecisionReportModel(baseRun);
 
-    expect(model?.recommendation).toBe("Do not ship the message unchanged");
     expect(model?.metrics.find((metric) => metric.label === "Resistance")?.value).toBe("50%");
     expect(model?.divergences).toHaveLength(2);
   });

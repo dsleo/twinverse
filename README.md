@@ -4,7 +4,7 @@ Tweenverse is a research-oriented prototype for synthetic public-opinion simulat
 
 In practical terms, Tweenverse takes a public prompt such as a policy question, article, proposal, or speech and produces:
 - a segmented synthetic audience
-- evidence retrieval from multiple public information channels
+- an LLM-planned evidence search across public information channels
 - segment-specific context packs
 - persona-level reactions
 - an aggregate divergence report
@@ -47,72 +47,26 @@ That distinction matters. The system is designed to surface:
 
 The pipeline combines deterministic orchestration with role-specialized model agents. The orchestration layer controls sequence, validation, persistence, and failure handling. The model agents perform bounded inference tasks with structured outputs.
 
-```text
-+----------------------------------------------------------------------------------+
-|                                  TWEENVERSE                                      |
-|                    Multi-Agent Pipeline For Grounded Opinion Simulation          |
-+----------------------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    input["Public prompt"] --> normalize["Input normalization"]
+    normalize --> design["Population Mapper: design five audience segments"]
+    personas["Persona corpus"] --> map["Deterministic panel mapping"]
+    design --> map
 
-        Public prompt
-   (question / article / proposal / speech)
-                |
-                v
-+-------------------------------+
-| 1. Input normalization        |
-| - classify prompt type        |
-| - preserve original wording   |
-+-------------------------------+
-                |
-                v
-+-------------------------------+         Persona corpus
-| 2. Population mapper agent    |<-------------------------------+
-| - infer relevant segments     |                                |
-| - define segment rationale    |                                |
-| - assign panel personas       |                                |
-+-------------------------------+                                |
-                |                                                |
-                v                                                |
-+-------------------------------+         Public evidence layer   |
-| 3. Retrieval subsystem        |<-------------------------------+
-| - Wikipedia background        |
-| - news / RSS framing          |
-| - event and discourse signals |
-| - fallback if sources fail    |
-+-------------------------------+
-                |
-                v
-+-------------------------------+
-| 4. Context-pack builder agents|
-| - one pack per segment        |
-| - what is likely known        |
-| - what is likely ignored      |
-| - emotional/practical framing |
-+-------------------------------+
-                |
-                v
-+-------------------------------+
-| 5. Reaction agents            |
-| - simulate persona responses  |
-| - emit stance, confidence,    |
-|   drivers, quote, impact      |
-+-------------------------------+
-                |
-                v
-+-------------------------------+
-| 6. Aggregator agent           |
-| - summarize segment patterns  |
-| - identify divergences        |
-| - state caveats explicitly    |
-+-------------------------------+
-                |
-                v
-+-------------------------------+
-| Final artifact                |
-| - synthetic audience report   |
-| - evidence-linked rationale   |
-| - disagreement map            |
-+-------------------------------+
+    design --> planner["Research Planner (LLM)\nChoose providers, concise faithful queries, and recipient segments"]
+    planner --> retrieve["Retrieve each provider/query once\nWikipedia · RSS · Vie publique · data.gouv · Reddit"]
+    retrieve --> trace["Evidence trace\nPersist provider outcomes and retrieved items"]
+
+    map --> route["Route live items to eligible segments\nand cap each segment's source set"]
+    retrieve --> route
+    route --> packs["Context Pack Builder\nOne bounded briefing per segment"]
+    packs --> reactions["Reaction agents\nTwo personas per segment"]
+    reactions --> aggregate["Aggregator\nPatterns, splits, and caveats"]
+    aggregate --> report["Decision report and inspectable run trace"]
 ```
+
+The population mapper first designs the segment descriptions. From there, persona mapping and research planning run in parallel: one path selects representative people while the other plans and collects the information environment those segments may encounter. The two paths meet only when live evidence is routed into segment-specific context packs.
 
 ## Why It Is Multi-Agentic
 
@@ -121,6 +75,8 @@ Tweenverse is multi-agentic in the scientific sense, not because it launches aut
 The current role structure is:
 - `PopulationMapperAgent`
   Determines which audience segments are relevant and how personas should be grouped.
+- `ResearchPlannerAgent`
+  Receives the original question and the five segment descriptions, then chooses a minimal set of provider/query tasks and the segments each task can inform.
 - `ContextPackBuilderAgent`
   Converts retrieved evidence plus segment characteristics into a compact informational framing for each segment.
 - `ReactionAgent`
@@ -205,6 +161,14 @@ The evidence layer retrieves public signals from multiple sources with different
 
 This layer approximates the informational environment surrounding the prompt. It does not claim that every persona sees the same evidence, only that the system should not simulate reactions in an evidentiary vacuum.
 
+### LLM-planned retrieval and segment routing
+
+Retrieval is no longer a fixed query fan-out. The `ResearchPlannerAgent` sees the original user question alongside the full set of segment descriptions, concerns, and information needs. It returns a small structured plan: provider, faithful query, intended segment IDs, a terse rationale, and the concerns that triggered the request.
+
+The orchestration layer validates that plan before making network calls. It prevents duplicate provider/query pairs, limits the plan to six tasks (including at most two RSS searches), and reuses one retrieval for every segment that can benefit from it. A provider is therefore queried once for a shared information need, never once per segment.
+
+Retrieved live items are then routed only to the segments named by the plan and ranked against that segment's concerns and representative personas. Each segment receives at most three items. Context packs contain titles and bounded provider snippets rather than full article bodies; the exact source IDs supplied to each pack are persisted, so the evidence trace can show which segments received every item.
+
 ### 3. Agentic reasoning layer
 
 The reasoning layer transforms population priors and evidence into synthetic responses. It does so gradually:
@@ -220,10 +184,10 @@ That order is deliberate. It mirrors a theoretical view in which opinion is not 
 For a single run, the system proceeds as follows:
 
 1. A user submits a prompt.
-2. The system identifies a relevant synthetic audience panel.
-3. The population-mapping agent proposes five audience segments and links personas to them.
-4. The retrieval subsystem gathers current public evidence from multiple providers.
-5. A context-pack agent writes one briefing per segment, emphasizing what that segment is likely to notice, miss, fear, or value.
+2. The population-mapping agent designs five prompt-relevant audience segments.
+3. In parallel, deterministic mapping selects a representative panel while the research planner creates a segment-aware retrieval plan.
+4. The retrieval subsystem executes each planned provider/query pair once and records the outcome.
+5. Live items are routed to the relevant segments, then the context-pack agent writes one bounded briefing per segment.
 6. Reaction agents simulate a small number of persona-level responses inside each segment.
 7. The aggregator agent turns those responses into a divergence report.
 8. The interface exposes both the final narrative and the intermediate artifacts used to construct it.
@@ -285,19 +249,19 @@ The live lab pipeline depends on an OpenAI API key and uses structured outputs t
 
 The retrieval layer is also designed to degrade gracefully:
 - successful providers contribute live evidence
-- failed providers emit fallback artifacts instead of breaking the full run
+- provider failures and timeouts are recorded as provider outcomes rather than being presented as sources
 
-This preserves continuity of the experiment while making uncertainty and source failure visible.
+This makes uncertainty and source failure visible without inventing evidence.
 
 ## Pipeline Performance Notes
 
 The current orchestration keeps the slowest work off the critical path where possible:
-- retrieval starts from the raw prompt immediately and runs in parallel with persona-cache loading and population mapping
+- after segment design, research planning and retrieval run in parallel with deterministic panel mapping
 - context-pack generation runs in parallel across the five derived segments
 - persona reactions are batched per segment so the system makes five reaction calls rather than ten individual persona calls
 - run state is kept in memory during execution and persisted at stage checkpoints rather than rereading the full run record between stages
 
-Today, retrieval depends only on the raw prompt, not on the derived segments. A plausible later extension is segment-aware retrieval, where the system would expand or refine provider queries using each segment's concerns and information needs. That may improve relevance, but it would also increase latency, provider fan-out, and orchestration complexity, so it is intentionally deferred.
+The research planner deliberately plans a shared set of searches across segments, rather than multiplying calls by five. Full-article extraction and model-generated summarisation are deliberately deferred: current context packs use bounded provider extracts to control token load and preserve an inspectable retrieval trace.
 
 ## How To Run
 

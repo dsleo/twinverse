@@ -6,6 +6,7 @@ import { logLabRun, logLabStage, logLabTokenTotals } from "./logging";
 import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
 import { mapPopulationToPanel } from "./populationMapping";
+import { routeSourcesBySegment } from "./sourceRouting";
 import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
 import { executeTvAudienceRun } from "./tvPipeline";
@@ -167,19 +168,18 @@ export async function executeLabRun(runId: string) {
     });
     await persistRun();
 
-    const preferredSources = retrievalState.sources.filter((source) => source.provenance === "live").slice(0, 4);
-    const sourcesForPrompts = preferredSources.length > 0 ? preferredSources : retrievalState.sources.slice(0, 4);
     const personasBySegment = new Map(
       populationMap.segments.map((segment) => [
         segment.id,
         panel.filter((persona) => segment.representativePersonaIds.includes(persona.id)),
       ]),
     );
+    const sourcesBySegment = routeSourcesBySegment(populationMap.segments, personasBySegment, retrievalState.sources);
     const contextPackResults = await buildContextPacks(
       currentRun!.input,
       populationMap.segments,
       personasBySegment,
-      sourcesForPrompts,
+      sourcesBySegment,
       { runId },
     );
     addTokenUsage(tokenTotals, contextPackResults.tokenUsage);
@@ -214,7 +214,7 @@ export async function executeLabRun(runId: string) {
         if (!contextPack) {
           throw new Error(`Reaction context pack missing for ${segment.id}.`);
         }
-        return buildReactionsForSegment(currentRun!.input, segment, personas, contextPack, sourcesForPrompts, { runId });
+        return buildReactionsForSegment(currentRun!.input, segment, personas, contextPack, sourcesBySegment.get(segment.id) ?? [], { runId });
       }),
     );
     for (const result of reactionResults) {

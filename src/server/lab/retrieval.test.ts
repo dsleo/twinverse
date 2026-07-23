@@ -61,8 +61,8 @@ describe("retrieveSources", () => {
     expect(result.outcomes.find((outcome) => outcome.provider === "data_gouv")?.status).toBe("upstream_failure");
     expect(result.sources.some((source) => source.provider === "wikipedia" && source.provenance === "live")).toBe(true);
     expect(result.sources.some((source) => source.provider === "rss" && source.provenance === "live")).toBe(true);
-    expect(result.sources.some((source) => source.provider === "vie_publique" && source.provenance === "fallback")).toBe(true);
-    expect(result.sources.some((source) => source.provider === "data_gouv" && source.provenance === "fallback")).toBe(true);
+    expect(result.sources.some((source) => source.provider === "vie_publique")).toBe(false);
+    expect(result.sources.some((source) => source.provider === "data_gouv")).toBe(false);
     expect(result.plan?.providerDecisions.find((decision) => decision.provider === "reddit")?.reason).toMatch(/discourse/i);
     expect(result.sourceExplanations).toHaveLength(result.sources.length);
     expect(result.evidenceClaims.every((claim) => claim.claimType === "observed")).toBe(true);
@@ -106,7 +106,7 @@ describe("retrieveSources", () => {
     });
 
     expect(result.outcomes.find((outcome) => outcome.provider === "wikipedia")?.status).toBe("parse_failure");
-    expect(result.sources.some((source) => source.provider === "wikipedia" && source.provenance === "fallback")).toBe(true);
+    expect(result.sources.some((source) => source.provider === "wikipedia")).toBe(false);
   });
 
   it("returns live official sources when the new providers match", async () => {

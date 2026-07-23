@@ -21,7 +21,7 @@ type ProviderResult = {
 
 type QueryPlan = ProviderDecision[];
 
-const searchStopwords = new Set(["faut", "pour", "avec", "dans", "contre", "entre", "question", "article", "france"]);
+const searchStopwords = new Set(["faut", "pour", "avec", "dans", "contre", "entre", "question", "article", "france", "craignez", "leurs", "perdent", "devons", "doit"]);
 
 function slugify(value: string) {
   return value
@@ -52,7 +52,8 @@ function buildSearchPhrase(input: string) {
     .match(/[a-zà-ÿ]{4,}/gi)
     ?.map((token) => normalizeText(token))
     .filter((token) => !searchStopwords.has(token))
-    .slice(0, 5) ?? [];
+    .flatMap((token) => (token === "ia" ? ["intelligence", "artificielle"] : [token]))
+    .slice(0, 7) ?? [];
 
   return keywords.length > 0 ? keywords.join(" ") : input;
 }
@@ -86,9 +87,9 @@ export function buildRetrievalPlan(input: LabInput): RetrievalPlan {
   const decisions: ProviderDecision[] = [
     providerDecision(
       "wikipedia",
-      input.rawInput,
+      searchPhrase,
       "Adds stable background context so the model does not reason from a bare prompt.",
-      ["prompt", promptKind],
+      ["search phrase", promptKind],
       0.72,
     ),
     providerDecision(
@@ -604,7 +605,7 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
           ? "Vie publique returned no recent official policy result that clearly matched this prompt."
           : provider === "data_gouv"
             ? "data.gouv.fr returned no relevant official dataset result for this prompt."
-            : `${providerLabel(provider)} returned no relevant results for this prompt.`;
+            : `${providerLabel(provider)} returned no results for this query.`;
 
       return {
         outcome: {
@@ -615,7 +616,7 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
           message: noResultsMessage,
           diagnostics: {},
         },
-        sources: [fallbackSource(provider, query, noResultsMessage)],
+        sources: [],
       };
     }
 
@@ -646,7 +647,7 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
         message,
         diagnostics: status ? { httpStatus: String(status) } : {},
       },
-      sources: [fallbackSource(provider, query, message)],
+      sources: [],
     };
   }
 }

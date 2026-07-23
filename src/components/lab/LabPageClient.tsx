@@ -286,6 +286,8 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
     () => new Map((run?.retrieval?.sourceExplanations ?? []).map((explanation) => [explanation.sourceId, explanation])),
     [run?.retrieval?.sourceExplanations],
   );
+  const sourcesById = useMemo(() => new Map((run?.retrieval?.sources ?? []).map((source) => [source.id, source])), [run?.retrieval?.sources]);
+  const selectedSegmentSources = selectedSegmentPack?.supportingSourceIds.map((sourceId) => sourcesById.get(sourceId)).filter((source): source is NonNullable<typeof source> => Boolean(source)) ?? [];
   const segmentSamplePersonas = selectedSegment
     ? selectedSegment.representativePersonaIds
         .map((personaId) => run?.panel.find((persona) => persona.id === personaId))
@@ -648,7 +650,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         </section>
       ) : null}
 
-      {run?.retrieval?.sources.length ? (
+      {run?.retrieval ? (
         <details id="lab-sources" className="lab-card lab-collapsible" open>
           <summary className="lab-summary-toggle">
             <div>
@@ -681,6 +683,18 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               </div>
             </div>
           ) : null}
+          <div className="provider-decision-grid" aria-label="Provider attempts">
+            {run.retrieval.outcomes.map((outcome) => (
+              <article key={outcome.provider} className="provider-decision">
+                <div className="card-topline">
+                  <strong>{outcome.provider.replace("_", ".")}</strong>
+                  <span>{outcome.status.replaceAll("_", " ")}</span>
+                </div>
+                <small>Query: {outcome.query}</small>
+                <p>{outcome.message}</p>
+              </article>
+            ))}
+          </div>
           {run.retrieval.evidenceClaims.length ? (
             <div className="claim-legend" aria-label="Evidence claim types">
               {(["observed", "simulated", "inferred"] as const).map((type) => (
@@ -690,6 +704,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               ))}
             </div>
           ) : null}
+          {run.retrieval.sources.length === 0 ? <p className="source-reason">No provider returned a usable source. See each provider attempt above for the exact failure.</p> : null}
           <div className="source-provenance-grid">
             {run.retrieval.sources.map((source) => {
               const explanation = sourceExplanationsById.get(source.id);
@@ -782,6 +797,14 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <span>
                 <strong>Practical:</strong> {selectedSegmentPack.practicalImplications.join(" | ")}
               </span>
+            </div>
+            <div className="source-explanation">
+              <strong>Sources supplied to this segment</strong>
+              {selectedSegmentSources.length ? (
+                <ul>{selectedSegmentSources.map((source) => <li key={source.id}>{source.sourceName ?? source.provider}: {source.title}</li>)}</ul>
+              ) : (
+                <p>No live source was supplied to this segment.</p>
+              )}
             </div>
           </div>
         </dialog>

@@ -310,7 +310,7 @@ export const retrievalResultSchema = z.object({
   searchPhrase: z.string().min(1),
   plan: retrievalPlanSchema.optional(),
   outcomes: z.array(providerOutcomeSchema).min(1),
-  sources: z.array(retrievedSourceSchema).min(1),
+  sources: z.array(retrievedSourceSchema).default([]),
   sourceExplanations: z.array(sourceSelectionExplanationSchema).default([]),
   evidenceClaims: z.array(evidenceClaimSchema).default([]),
 });
@@ -326,7 +326,7 @@ export const contextPackSchema = z.object({
   emotionalPrimers: z.array(z.string().min(1)).min(1),
   practicalImplications: z.array(z.string().min(1)).min(1),
   rationale: z.string().min(1),
-  supportingSourceIds: z.array(z.string().min(1)).min(1),
+  supportingSourceIds: z.array(z.string().min(1)).default([]),
 });
 export type ContextPack = z.infer<typeof contextPackSchema>;
 

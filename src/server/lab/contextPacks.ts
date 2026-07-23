@@ -41,13 +41,13 @@ export async function buildContextPacks(
   input: LabInput,
   segments: AssignedSegment[],
   personasBySegment: Map<string, NormalizedPersona[]>,
-  sources: RetrievedSource[],
+  sourcesBySegment: Map<string, RetrievedSource[]>,
   options?: { runId?: string },
 ): Promise<ContextPackBatchResult> {
   if (options?.runId) {
     logLabRun(options.runId, "context-pack-batch-build", {
       segments: segments.length,
-      sources: sources.length,
+      sources: Array.from(sourcesBySegment.values()).reduce((total, sources) => total + sources.length, 0),
     });
   }
 
@@ -80,12 +80,7 @@ export async function buildContextPacks(
           profileNarrative: persona.profileNarrative,
         })),
       })),
-      sources: sources.map((source) => ({
-        title: source.title,
-        snippet: source.snippet,
-        sourceName: source.sourceName,
-        provenance: source.provenance,
-      })),
+      sourcesBySegment: segments.map((segment) => ({ segmentId: segment.id, sources: (sourcesBySegment.get(segment.id) ?? []).map((source) => ({ id: source.id, title: source.title, snippet: source.snippet, sourceName: source.sourceName, provenance: source.provenance })) })),
     },
     null,
     2,
@@ -106,7 +101,7 @@ export async function buildContextPacks(
       pack.segmentId,
       contextPackSchema.parse({
         id: `context-pack-${pack.segmentId}`,
-        supportingSourceIds: sources.map((source) => source.id).slice(0, 4),
+        supportingSourceIds: (sourcesBySegment.get(pack.segmentId) ?? []).map((source) => source.id),
         ...pack,
       }),
     ]),

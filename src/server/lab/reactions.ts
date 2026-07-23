@@ -12,14 +12,25 @@ const reactionOutputSchema = reactionResultSchema.omit({
   contextPackId: true,
 });
 
-const batchedReactionOutputSchema = z.object({
-  reactions: z.array(
-    z.object({
-      personaId: z.string().min(1),
-      ...reactionOutputSchema.shape,
-    }),
-  ).min(1),
-});
+export function batchedReactionOutputSchema(personaIds: [string, ...string[]]) {
+  return z.object({
+    reactions: z.array(
+      z.object({
+        personaId: z.enum(personaIds),
+        ...reactionOutputSchema.shape,
+      }),
+    ).length(personaIds.length),
+  });
+}
+
+function combineTokenUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    totalTokens: left.totalTokens + right.totalTokens,
+    estimated: left.estimated || right.estimated,
+  };
+}
 
 export type ReactionBatchResult = {
   reactions: z.infer<typeof reactionResultSchema>[];
@@ -52,6 +63,13 @@ export async function buildReactionsForSegment(
     });
   }
 
+  if (personas.length === 0) {
+    throw new Error(`Reaction batch for ${segment.id} has no personas to evaluate.`);
+  }
+
+  const requestedPersonaIds = personas.map((persona) => persona.id) as [string, ...string[]];
+  const outputSchema = batchedReactionOutputSchema(requestedPersonaIds);
+  const personaIds = new Set(requestedPersonaIds);
   const system = [
     "You simulate French personas' reactions to a public prompt.",
     "Use only the supplied persona profiles, segment framing, context pack, and sources.",
@@ -92,42 +110,50 @@ export async function buildReactionsForSegment(
     2,
   );
 
-  const result = await callStructuredModel({
-    schema: batchedReactionOutputSchema,
-    schemaName: `reactions_${segment.id}`,
-    stageName: "ReactionAgentBatch",
-    system,
-    user,
-    runId: options?.runId,
-    traceLabel: `reactions:${segment.id}`,
-  });
+  let tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimated: false };
+  let lastError: Error | null = null;
 
-  const personaIds = new Set(personas.map((persona) => persona.id));
-  const reactions = result.data.reactions.map((reaction) => {
-    const { personaId, ...reactionData } = reaction;
-    return reactionResultSchema.parse({
-      personaId,
-      segmentId: segment.id,
-      contextPackId: contextPack.id,
-      ...reactionData,
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const attemptUser = attempt === 1
+      ? user
+      : `${user}\n\nCorrection: return exactly one reaction for each of these personaIds: ${requestedPersonaIds.join(", ")}.`;
+    const result = await callStructuredModel({
+      schema: outputSchema,
+      schemaName: `reactions_${segment.id}`,
+      stageName: "ReactionAgentBatch",
+      system,
+      user: attemptUser,
+      runId: options?.runId,
+      traceLabel: `reactions:${segment.id}:attempt-${attempt}`,
     });
-  });
+    tokenUsage = combineTokenUsage(tokenUsage, result.tokenUsage);
 
-  if (reactions.length !== personas.length) {
-    throw new Error(`Reaction batch for ${segment.id} returned ${reactions.length} reactions for ${personas.length} personas.`);
+    const reactions = result.data.reactions.map((reaction) => {
+      const { personaId, ...reactionData } = reaction;
+      return reactionResultSchema.parse({
+        personaId,
+        segmentId: segment.id,
+        contextPackId: contextPack.id,
+        ...reactionData,
+      });
+    });
+
+    const returnedPersonaIds = reactions.map((reaction) => reaction.personaId);
+    if (new Set(returnedPersonaIds).size === reactions.length && returnedPersonaIds.every((personaId) => personaIds.has(personaId))) {
+      return { reactions, diagnostics: result.diagnostics, tokenUsage };
+    }
+
+    lastError = new Error(`Reaction batch for ${segment.id} did not return one reaction for each requested persona.`);
+    if (options?.runId) {
+      logLabRun(options.runId, "reaction-batch-invalid", {
+        segment: segment.id,
+        attempt,
+        expectedPersonas: requestedPersonaIds.length,
+        returnedPersonas: reactions.length,
+        uniquePersonas: new Set(returnedPersonaIds).size,
+      });
+    }
   }
 
-  if (new Set(reactions.map((reaction) => reaction.personaId)).size !== reactions.length) {
-    throw new Error(`Reaction batch for ${segment.id} returned duplicate persona ids.`);
-  }
-
-  if (reactions.some((reaction) => !personaIds.has(reaction.personaId))) {
-    throw new Error(`Reaction batch for ${segment.id} returned an unknown persona id.`);
-  }
-
-  return {
-    reactions,
-    diagnostics: result.diagnostics,
-    tokenUsage: result.tokenUsage,
-  };
+  throw lastError ?? new Error(`Reaction batch for ${segment.id} failed validation.`);
 }

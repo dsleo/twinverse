@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { DecisionReport } from "./DecisionReport";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
 import { TvAudienceResult } from "./TvAudienceResult";
 import { runModeLabels } from "../../lib/labAudience";
@@ -264,6 +265,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         { id: "summary-panel", label: "Segments", value: `${run.populationMap?.segments.length ?? 0}`, targetId: "lab-population" },
         { id: "summary-reactions", label: "Reactions", value: `${run.reactions.length}`, targetId: "lab-reactions" },
         { id: "summary-sources", label: "Sources", value: `${run.retrieval?.sources.length ?? 0}`, targetId: "lab-sources" },
+        { id: "summary-report", label: "Report", value: run.aggregateReport ? "Ready" : "Pending", targetId: "lab-decision-report" },
       ]
     : [];
 
@@ -600,26 +602,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
         </section>
       ) : null}
 
-      {run?.aggregateReport ? (
-        <section id="lab-divergence" className="lab-card">
-          <div className="section-heading section-heading-compact">
-            <div>
-              <div className="section-label">Divergence report</div>
-              <h2>How the evaluated panel splits</h2>
-            </div>
-          </div>
-          <p>{run.aggregateReport.executiveSummary}</p>
-          <p>{run.aggregateReport.overallPattern}</p>
-          <ul>
-            {run.aggregateReport.mainDivergences.map((item) => (
-              <li key={item.title}>
-                <strong>{item.title}:</strong> {item.description}
-              </li>
-            ))}
-          </ul>
-          <p className="lab-warning">{run.aggregateReport.caveats.join(" ")}</p>
-        </section>
-      ) : null}
+      {run?.aggregateReport ? <DecisionReport run={run} /> : null}
 
       {run?.tvPredictions && run.tvPredictions.length > 0 ? (
         <section id="tv-predictions" className="lab-card">

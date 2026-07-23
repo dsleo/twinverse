@@ -278,6 +278,17 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const selectedPersona = run?.panel.find((persona) => persona.id === selectedReaction?.personaId) ?? null;
   const selectedPack = run?.contextPacks.find((pack) => pack.id === selectedReaction?.contextPackId) ?? null;
   const sourcesById = useMemo(() => new Map((run?.retrieval?.sources ?? []).map((source) => [source.id, source])), [run?.retrieval?.sources]);
+  const receivingSegmentsBySourceId = useMemo(() => {
+    const receivedBy = new Map<string, string[]>();
+    for (const pack of run?.contextPacks ?? []) {
+      for (const sourceId of pack.supportingSourceIds) {
+        const labels = receivedBy.get(sourceId) ?? [];
+        labels.push(pack.label);
+        receivedBy.set(sourceId, labels);
+      }
+    }
+    return receivedBy;
+  }, [run?.contextPacks]);
   const retainedSourceGroups = useMemo(() => {
     const sources = (run?.retrieval?.sources ?? []).filter((source) => source.provenance === "live");
     const decisions = run?.retrieval?.plan?.providerDecisions;
@@ -700,6 +711,11 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                           ) : (
                             <span className="source-tag">{source.sourceName}</span>
                           )
+                        ) : null}
+                        {(receivingSegmentsBySourceId.get(source.id) ?? []).length ? (
+                          <p className="source-recipients">
+                            <strong>Received by</strong> {receivingSegmentsBySourceId.get(source.id)?.join(" · ")}
+                          </p>
                         ) : null}
                         <p>{source.snippet}</p>
                       </article>

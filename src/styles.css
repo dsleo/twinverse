@@ -393,6 +393,11 @@ a.source-tag:hover {
   margin: 0;
 }
 
+.source-item .source-recipients {
+  color: var(--quiet);
+  font-size: 0.82rem;
+}
+
 .segment-explorer {
   display: grid;
   gap: 1rem;

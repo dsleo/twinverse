@@ -13,6 +13,7 @@ import type {
   SourceSelectionExplanation,
 } from "../../lib/labSchemas";
 import { retrievalResultSchema } from "../../lib/labSchemas";
+import { logLabRun } from "./logging";
 
 type ProviderResult = {
   outcome: ProviderOutcome;
@@ -587,7 +588,14 @@ async function dataGouvSources(query: string) {
     .slice(0, 3);
 }
 
-async function runProvider(provider: Provider, query: string): Promise<ProviderResult> {
+async function runProvider(provider: Provider, query: string, options?: { runId?: string; segmentCount?: number }): Promise<ProviderResult> {
+  if (options?.runId) {
+    logLabRun(options.runId, "source-provider-start", {
+      provider,
+      queryCharacters: query.length,
+      plannedSegments: options.segmentCount,
+    });
+  }
   try {
     const sources =
       provider === "wikipedia"
@@ -608,7 +616,7 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
             ? "data.gouv.fr returned no relevant official dataset result for this prompt."
             : `${providerLabel(provider)} returned no results for this query.`;
 
-      return {
+      const result: ProviderResult = {
         outcome: {
           provider,
           status: "no_relevant_results",
@@ -619,9 +627,11 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
         },
         sources: [],
       };
+      if (options?.runId) logLabRun(options.runId, "source-provider-complete", { provider, status: result.outcome.status, sources: 0 });
+      return result;
     }
 
-    return {
+    const result: ProviderResult = {
       outcome: {
         provider,
         status: "success",
@@ -632,6 +642,8 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
       },
       sources,
     };
+    if (options?.runId) logLabRun(options.runId, "source-provider-complete", { provider, status: result.outcome.status, sources: sources.length });
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const statusMatch = message.match(/HTTP (\d{3})/);
@@ -639,7 +651,7 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
     const outcomeStatus =
       error instanceof ProviderResponseParseError ? "parse_failure" : status ? classifyProviderFailure(status) : "upstream_failure";
 
-    return {
+    const result: ProviderResult = {
       outcome: {
         provider,
         status: outcomeStatus,
@@ -650,18 +662,26 @@ async function runProvider(provider: Provider, query: string): Promise<ProviderR
       },
       sources: [],
     };
+    if (options?.runId) logLabRun(options.runId, "source-provider-complete", { provider, status: outcomeStatus, sources: 0, httpStatus: status });
+    return result;
   }
 }
 
-export async function retrieveSources(input: LabInput, suppliedPlan?: RetrievalPlan) {
+export async function retrieveSources(input: LabInput, suppliedPlan?: RetrievalPlan, options?: { runId?: string }) {
   const plan = suppliedPlan ?? buildRetrievalPlan(input);
   const queries = plan.providerDecisions;
-  const results = await Promise.all(queries.map((query) => runProvider(query.provider, query.query)));
+  if (options?.runId) {
+    logLabRun(options.runId, "source-retrieval-start", {
+      tasks: queries.length,
+      providers: Array.from(new Set(queries.map((query) => query.provider))).join(","),
+    });
+  }
+  const results = await Promise.all(queries.map((query) => runProvider(query.provider, query.query, { runId: options?.runId, segmentCount: query.segmentIds.length })));
   const sources = results
     .flatMap((result) => result.sources)
     .sort((a, b) => b.relevanceScore - a.relevanceScore || a.title.localeCompare(b.title));
 
-  return retrievalResultSchema.parse({
+  const retrieval = retrievalResultSchema.parse({
     searchPhrase: buildSearchPhrase(input.rawInput),
     plan,
     outcomes: results.map((result) => result.outcome),
@@ -669,4 +689,12 @@ export async function retrieveSources(input: LabInput, suppliedPlan?: RetrievalP
     sourceExplanations: sources.map(explainSourceSelection),
     evidenceClaims: buildEvidenceClaims(sources),
   });
+  if (options?.runId) {
+    logLabRun(options.runId, "source-retrieval-complete", {
+      sources: retrieval.sources.length,
+      successfulProviders: retrieval.outcomes.filter((outcome) => outcome.status === "success").length,
+      unsuccessfulProviders: retrieval.outcomes.filter((outcome) => outcome.status !== "success").length,
+    });
+  }
+  return retrieval;
 }

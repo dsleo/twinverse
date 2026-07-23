@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { type LabInput, providerDecisionSchema, type PopulationSegmentSpec, retrievalPlanSchema, type RetrievalPlan } from "../../lib/labSchemas";
+import { logLabRun } from "./logging";
 import { callStructuredModel, type StructuredCallResult } from "./openaiStructured";
 import type { TokenUsage } from "./tokenAccounting";
 
@@ -19,6 +20,12 @@ export async function planSegmentResearch(
   segments: PopulationSegmentSpec[],
   options?: { runId?: string },
 ): Promise<ResearchPlanResult> {
+  if (options?.runId) {
+    logLabRun(options.runId, "research-plan-start", {
+      segments: segments.length,
+      questionCharacters: input.rawInput.length,
+    });
+  }
   const system = [
     "You are a source research planner for an audience simulation.",
     "Plan the smallest useful set of source retrieval requests for the supplied question and segments.",
@@ -63,6 +70,16 @@ export async function planSegmentResearch(
     return true;
   });
   if (decisions.length === 0) throw new Error("Research planner returned no valid retrieval tasks.");
+  if (options?.runId) {
+    logLabRun(options.runId, "research-plan-ready", {
+      modelTasks: result.data.tasks.length,
+      acceptedTasks: decisions.length,
+      discardedTasks: result.data.tasks.length - decisions.length,
+      providers: Array.from(new Set(decisions.map((task) => task.provider))).join(","),
+      segmentAssignments: decisions.reduce((total, task) => total + task.segmentIds.length, 0),
+      sharedTasks: decisions.filter((task) => task.segmentIds.length > 1).length,
+    });
+  }
   return {
     plan: retrievalPlanSchema.parse({
       inputTerms: [input.rawInput],

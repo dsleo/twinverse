@@ -124,7 +124,7 @@ export async function executeLabRun(runId: string) {
     const planned = await researchPlanTask;
     if (!planned.ok) throw planned.error;
     addTokenUsage(tokenTotals, planned.value.tokenUsage);
-    const retrievalTask = settleTask(retrieveSources(currentRun.input, planned.value.plan));
+    const retrievalTask = settleTask(retrieveSources(currentRun.input, planned.value.plan, { runId }));
     const mappingResult = await mappingTask;
     if (!mappingResult.ok) throw mappingResult.error;
     const mapped = mappingResult.value;
@@ -183,7 +183,7 @@ export async function executeLabRun(runId: string) {
         panel.filter((persona) => segment.representativePersonaIds.includes(persona.id)),
       ]),
     );
-    const sourcesBySegment = routeSourcesBySegment(populationMap.segments, personasBySegment, retrievalState.sources, retrievalState.plan);
+    const sourcesBySegment = routeSourcesBySegment(populationMap.segments, personasBySegment, retrievalState.sources, retrievalState.plan, { runId });
     const contextPackResults = await buildContextPacks(
       currentRun!.input,
       populationMap.segments,

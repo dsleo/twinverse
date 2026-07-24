@@ -129,6 +129,17 @@ export function AudienceBuilder({
     updateGuidance({ ...guidance, [target]: [...guidance[target], filter] });
   }
 
+  function acceptAudience() {
+    if (!preview) return;
+    onApprovedDesignChange(preview.proposal);
+    setPreview(null);
+  }
+
+  function discardAudience() {
+    setPreview(null);
+    onApprovedDesignChange(undefined);
+  }
+
   async function previewAudience() {
     setError(null);
     setIsPreviewing(true);
@@ -286,22 +297,24 @@ export function AudienceBuilder({
               );
             })}
           </ol>
-          <div className="audience-proposal-actions">
-            <button
-              type="button"
-              className="accent-button"
-              onClick={() => onApprovedDesignChange(preview.proposal)}
-              disabled={preview.warnings.length > 0}
-            >
-              Use this audience
-            </button>
-            {isApproved ? (
-              <span className="status-pill status-complete">
-                Audience approved
-              </span>
-            ) : null}
+          <div className="audience-approval">
+            <p>Does this reflect the public you want to test?</p>
+            <div>
+              <button type="button" className="audience-accept" onClick={acceptAudience} disabled={preview.warnings.length > 0}>Accept</button>
+              <button type="button" className="audience-discard" onClick={discardAudience}>Discard</button>
+            </div>
           </div>
         </section>
+      ) : null}
+
+      {isApproved && !preview ? (
+        <div className="audience-accepted" aria-live="polite">
+          <div>
+            <span className="section-label">Audience accepted</span>
+            <p>Five segments are locked for this simulation.</p>
+          </div>
+          <button type="button" onClick={discardAudience}>Change audience</button>
+        </div>
       ) : null}
 
       {error ? (

@@ -41,6 +41,46 @@ describe("LabPageClient", () => {
     expect(screen.queryByRole("button", { name: "Run simulation" })).not.toBeInTheDocument();
   });
 
+  it("requires audience acceptance before exposing the simulation action", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/lab/audience-options")) {
+          return { ok: true, json: async () => ({ taxonomy: { life_stage: ["midcareer"] } }) } as Response;
+        }
+        if (url.includes("/api/lab/audience-preview")) {
+          return {
+            ok: true,
+            json: async () => ({
+              proposal: {
+                promptSummary: "Test proposal",
+                topicDimensions: ["energy"],
+                globalRationale: "Five distinct audience reads.",
+                segments: Array.from({ length: 5 }, (_, index) => ({ id: `segment-${index}`, label: `Segment ${index + 1}`, summary: "A distinct audience read.", concerns: ["cost"], informationNeeds: ["impact"], inclusionTags: [{ family: "life_stage", values: ["midcareer"] }], exclusionTags: [], preferredDiversityHints: [], rankingSignals: [], rankingCriteria: ["cost"] })),
+              },
+              eligibility: Array.from({ length: 5 }, (_, index) => ({ segmentId: `segment-${index}`, eligiblePersonaCount: 25 })),
+              warnings: [],
+            }),
+          } as Response;
+        }
+        throw new Error(`Unexpected request: ${input}`);
+      }) as unknown as typeof fetch,
+    );
+
+    render(<LabPageClient fixedMode="manual" />);
+    await userEvent.click(screen.getByLabelText("Guide the audience"));
+    await userEvent.click(await screen.findByRole("button", { name: "Review the five segments" }));
+
+    expect(await screen.findByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run simulation" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    expect(screen.getByText("Audience accepted")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run simulation" })).toBeInTheDocument();
+  });
+
   it("renders the Le Figaro mode as a read-only daily question flow", async () => {
     vi.stubGlobal(
       "fetch",

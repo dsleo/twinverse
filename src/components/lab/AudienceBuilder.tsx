@@ -246,12 +246,13 @@ export function AudienceBuilder({
 
           <button
             type="button"
-            className="quiet-button audience-preview-button"
+            className="audience-preview-button"
             onClick={previewAudience}
             disabled={!canPreview}
           >
-            {isPreviewing ? "Preparing audience…" : "Preview audience"}
+            {isPreviewing ? "Building the audience…" : "Review the five segments"}
           </button>
+          <small className="audience-preview-note">This checks the proposed audience only; it does not start the simulation.</small>
         </div>
       ) : null}
 

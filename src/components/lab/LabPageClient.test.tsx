@@ -37,7 +37,8 @@ describe("LabPageClient", () => {
     await userEvent.click(screen.getByLabelText("Guide the audience"));
 
     expect(await screen.findByText("Describe the public")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Preview audience" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review the five segments" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run simulation" })).not.toBeInTheDocument();
   });
 
   it("renders the Le Figaro mode as a read-only daily question flow", async () => {

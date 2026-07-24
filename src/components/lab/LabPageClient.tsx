@@ -364,6 +364,7 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
       : mode === "le_figaro_daily"
         ? isDailyQuestionLoading || !leFigaroAvailable
         : false);
+  const showRunAction = mode !== "manual" || audienceGuidance.mode === "automatic" || Boolean(approvedSegmentDesign);
 
   return (
     <div className="lab-page page-shell">
@@ -489,27 +490,29 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             />
           ) : null}
 
-          <div className="lab-command-row">
-            <button type="submit" className="accent-button" disabled={submitDisabled}>
-              {isRunActive ? "Running…" : "Run"}
-            </button>
-            <div className="lab-status" aria-live="polite">
-              {run ? (
-                <>
-                  {run.status === "running" ? null : (
-                    <span
-                      className={`status-pill ${
-                        run.status === "failed" ? "" : run.status === "completed" ? "status-complete" : "status-running"
-                      }`}
-                    >
-                      {run.status}
-                    </span>
-                  )}
-                  {currentStage?.summary ? <p>{currentStage.summary}</p> : null}
-                </>
-              ) : null}
+          {showRunAction ? (
+            <div className="lab-command-row">
+              <button type="submit" className="accent-button" disabled={submitDisabled}>
+                {isRunActive ? "Running…" : "Run simulation"}
+              </button>
+              <div className="lab-status" aria-live="polite">
+                {run ? (
+                  <>
+                    {run.status === "running" ? null : (
+                      <span
+                        className={`status-pill ${
+                          run.status === "failed" ? "" : run.status === "completed" ? "status-complete" : "status-running"
+                        }`}
+                      >
+                        {run.status}
+                      </span>
+                    )}
+                    {currentStage?.summary ? <p>{currentStage.summary}</p> : null}
+                  </>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {error ? (
             <p id="lab-input-error" className="lab-error" role="alert">

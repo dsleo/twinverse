@@ -735,10 +735,10 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                   <span className="source-tag">{group.sources.length} item{group.sources.length === 1 ? "" : "s"}</span>
                 </summary>
                 <div className="source-item-list">
-                  {group.sources.map((source) => {
+                  {group.sources.map((source, index) => {
                     const showTitle = !source.sourceName || !source.title.trim().toLocaleLowerCase().includes(source.sourceName.trim().toLocaleLowerCase());
                     return (
-                      <article key={source.id} className="source-item">
+                      <article key={`${source.id}:${source.url ?? source.title}:${source.publishedAt ?? ""}:${index}`} className="source-item">
                         {showTitle ? <h4>{source.title}</h4> : null}
                         {source.sourceName ? (
                           source.url ? (

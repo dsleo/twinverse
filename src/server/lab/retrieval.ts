@@ -33,6 +33,25 @@ function slugify(value: string) {
     .slice(0, 36);
 }
 
+/**
+ * Provider URLs, particularly Google News RSS redirects, often share a long
+ * prefix. Keep a short readable prefix, but use a hash of the full canonical
+ * value as the identity so separate articles cannot collapse into one ID.
+ */
+function stableHash(value: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function sourceId(provider: Provider, identity: string) {
+  const readablePart = slugify(identity).slice(0, 24) || "source";
+  return `${provider}-${readablePart}-${stableHash(identity)}`;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -331,7 +350,7 @@ async function wikipediaSources(query: string) {
 
   return [
     {
-      id: `wikipedia-${slugify(summary.title ?? title)}`,
+      id: sourceId("wikipedia", summary.content_urls?.desktop?.page ?? summary.title ?? title),
       provider: "wikipedia",
       provenance: "live",
       title: summary.title ?? title,
@@ -364,7 +383,7 @@ async function rssSources(query: string) {
     }
 
     return {
-      id: `rss-${slugify(xmlValue(item, "link") ?? `${query}-${index}`)}`,
+      id: sourceId("rss", xmlValue(item, "link") ?? `${query}:${title}:${xmlValue(item, "pubDate") ?? index}`),
       provider: "rss",
       provenance: "live",
       title,
@@ -397,7 +416,7 @@ async function redditSources(query: string) {
     }
     return [
       {
-        id: `reddit-${slugify(post.permalink ?? `${query}-${index}`)}`,
+        id: sourceId("reddit", post.permalink ?? `${query}:${post.title}:${post.created_utc ?? index}`),
         provider: "reddit",
         provenance: "live",
         title: post.title,
@@ -429,7 +448,7 @@ async function viePubliqueSources(query: string) {
       const relevanceScore = officialScore(query, `${title} ${snippet}`, publishedAt, 0.52) - index * 0.03;
 
       return {
-        id: `vie-publique-${slugify(url ?? title)}`,
+        id: sourceId("vie_publique", url ?? `${query}:${title}:${publishedAt ?? index}`),
         provider: "vie_publique",
         provenance: "live",
         title,
@@ -471,7 +490,7 @@ async function dataGouvSources(query: string) {
       const relevanceScore = officialScore(query, `${title} ${snippet} ${(dataset.tags ?? []).join(" ")}`, publishedAt, 0.48) - index * 0.03;
 
       return {
-        id: `data-gouv-${slugify(dataset.page ?? title)}`,
+        id: sourceId("data_gouv", dataset.page ?? `${query}:${title}:${publishedAt ?? index}`),
         provider: "data_gouv",
         provenance: "live",
         title,
@@ -578,8 +597,30 @@ export async function retrieveSources(input: LabInput, suppliedPlan?: RetrievalP
     });
   }
   const results = await Promise.all(queries.map((query) => runProvider(query.provider, query.query, { runId: options?.runId, segmentCount: query.segmentIds.length })));
-  const sources = results
-    .flatMap((result) => result.sources)
+  const decisionByProviderAndQuery = new Map(
+    queries.map((decision) => [`${decision.provider}:${decision.query}`, decision]),
+  );
+  const sourcesById = new Map<string, RetrievedSource>();
+  for (const source of results.flatMap((result) => result.sources)) {
+    const plannedSegmentIds = decisionByProviderAndQuery.get(`${source.provider}:${source.query}`)?.segmentIds ?? [];
+    const existing = sourcesById.get(source.id);
+    if (!existing) {
+      sourcesById.set(source.id, { ...source, intendedSegmentIds: plannedSegmentIds });
+      continue;
+    }
+
+    // A provider can repeat the same article, or two planned searches can find
+    // it. Present one item and retain the union of its intended audiences.
+    const intendedSegmentIds = Array.from(new Set([
+      ...(existing.intendedSegmentIds ?? []),
+      ...plannedSegmentIds,
+    ]));
+    sourcesById.set(source.id, {
+      ...(source.relevanceScore > existing.relevanceScore ? source : existing),
+      intendedSegmentIds,
+    });
+  }
+  const sources = Array.from(sourcesById.values())
     .sort((a, b) => b.relevanceScore - a.relevanceScore || a.title.localeCompare(b.title));
 
   const retrieval = retrievalResultSchema.parse({

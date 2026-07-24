@@ -291,6 +291,8 @@ export const retrievedSourceSchema = z.object({
   publishedAt: z.string().optional(),
   sourceName: z.string().min(1).optional(),
   query: z.string().min(1),
+  /** Segments the research plan explicitly intended this item to inform. */
+  intendedSegmentIds: z.array(z.string().min(1)).optional(),
   relevanceScore: z.number().min(0).max(1),
   tags: z.array(z.string().min(1)).default([]),
   failureReason: z.string().optional(),

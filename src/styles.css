@@ -87,7 +87,18 @@
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   cursor: pointer;
-  transition: color 160ms ease, background 160ms ease;
+  transition: color 180ms ease-out, background 180ms ease-out;
+}
+
+.audience-mode-toggle label:hover:not(.active) {
+  color: var(--text);
+  background: color-mix(in oklch, var(--surface-raised) 90%, var(--accent-soft) 10%);
+}
+
+.audience-mode-toggle label:has(input:focus-visible) {
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .audience-mode-toggle label + label {
@@ -135,7 +146,8 @@
 }
 
 .audience-guidance-fields > .audience-builder-field {
-  padding-bottom: clamp(1rem, 2vw, 1.5rem);
+  gap: 0.55rem;
+  padding-bottom: clamp(1.15rem, 2vw, 1.65rem);
   border-bottom: 1px solid var(--line);
 }
 
@@ -143,6 +155,14 @@
   font-family: var(--font-display);
   font-size: 1.05rem;
   letter-spacing: -0.02em;
+}
+
+.audience-guidance-fields > .audience-builder-field > small {
+  max-width: 46rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .audience-builder select,
@@ -176,8 +196,8 @@
 }
 
 .audience-builder textarea {
-  min-height: 7.25rem;
-  padding: 0.85rem;
+  min-height: 7.5rem;
+  padding: 0.9rem;
   resize: vertical;
 }
 
@@ -194,8 +214,15 @@
   gap: 0.8rem;
 }
 
+.audience-review-action {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+}
+
 .audience-preview-button {
   width: fit-content;
+  min-height: 2.8rem;
   padding: 0.7rem 1rem;
   border: 1px solid var(--accent);
   border-radius: 0.2rem;
@@ -206,7 +233,7 @@
   font-size: 0.86rem;
   font-weight: 850;
   letter-spacing: 0.01em;
-  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition: color 180ms ease-out, background 180ms ease-out, transform 180ms ease-out;
 }
 
 .audience-preview-button:hover:not(:disabled) {
@@ -220,11 +247,19 @@
   opacity: 0.45;
 }
 
+.audience-preview-button:focus-visible,
+.audience-accept:focus-visible,
+.audience-discard:focus-visible,
+.audience-accepted button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
 .audience-preview-note {
   display: block;
-  margin-top: -0.85rem;
   color: var(--muted);
   font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .audience-approval,
@@ -255,7 +290,8 @@
 .audience-accept,
 .audience-discard,
 .audience-accepted button {
-  padding: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -341,6 +377,13 @@
   font-size: 0.84rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .audience-mode-toggle label,
+  .audience-preview-button {
+    transition: none;
+  }
+}
+
 .audience-definition {
   margin-bottom: var(--space-3);
   color: var(--muted);
@@ -383,7 +426,7 @@
   gap: 0.9rem;
 }
 
-.lab-page textarea {
+.lab-form > #lab-input {
   width: 100%;
   border-radius: 0.95rem;
   border: 1px solid var(--line);
@@ -392,7 +435,7 @@
   padding: 1rem 1.05rem;
 }
 
-.lab-page textarea::placeholder {
+.lab-form > #lab-input::placeholder {
   color: var(--quiet);
 }
 

@@ -76,8 +76,12 @@ export function AudienceBuilder({
     }
   }
 
+  const hasAudienceBrief = (guidance.brief ?? "").trim().length >= 10;
   const canPreview =
-    input.rawInput.trim().length >= 10 && !disabled && !isPreviewing;
+    input.rawInput.trim().length >= 10 &&
+    hasAudienceBrief &&
+    !disabled &&
+    !isPreviewing;
   const isApproved = Boolean(approvedDesign);
 
   return (
@@ -86,67 +90,90 @@ export function AudienceBuilder({
         <span className="section-label">Audience</span>
       </legend>
 
-      <div
-        className="audience-mode-toggle"
-        role="radiogroup"
-        aria-label="Audience mode"
-      >
-        <label className={guidance.mode === "automatic" ? "active" : ""}>
-          <input
-            type="radio"
-            aria-label="Let Tweenverse choose"
-            checked={guidance.mode === "automatic"}
-            onChange={() =>
-              updateGuidance({
-                mode: "automatic",
-                include: [],
-                avoid: [],
-                priorityConcerns: [],
-              })
-            }
-          />
-          <span>Let Tweenverse choose</span>
-          <small>Build a balanced five-segment read.</small>
-        </label>
-        <label className={guidance.mode === "guided" ? "active" : ""}>
-          <input
-            type="radio"
-            aria-label="Guide the audience"
-            checked={guidance.mode === "guided"}
-            onChange={() => updateGuidance({ ...guidance, mode: "guided" })}
-          />
-          <span>Guide the audience</span>
-          <small>Set the public and the pressures that matter.</small>
-        </label>
-      </div>
-
-      {guidance.mode === "guided" ? (
-        <div className="audience-guidance-fields">
-          <label className="audience-builder-field">
-            <span>Describe the public</span>
-            <textarea
-              value={guidance.brief ?? ""}
-              onChange={(event) =>
-                updateGuidance({
-                  ...guidance,
-                  brief: event.target.value.slice(0, 360) || undefined,
-                })
-              }
-              rows={3}
-              placeholder="Working parents in secondary cities, concerned about household transport costs."
-            />
-          </label>
-
-          <button
-            type="button"
-            className="audience-preview-button"
-            onClick={previewAudience}
-            disabled={!canPreview}
+      {!isApproved ? (
+        <>
+          <div
+            className="audience-mode-toggle"
+            role="radiogroup"
+            aria-label="Audience mode"
           >
-            {isPreviewing ? "Building the audience…" : "Review the five segments"}
-          </button>
-          <small className="audience-preview-note">This checks the proposed audience only; it does not start the simulation.</small>
-        </div>
+            <label className={guidance.mode === "automatic" ? "active" : ""}>
+              <input
+                type="radio"
+                name="audience-mode"
+                aria-label="Let Tweenverse choose"
+                checked={guidance.mode === "automatic"}
+                onChange={() =>
+                  updateGuidance({
+                    mode: "automatic",
+                    include: [],
+                    avoid: [],
+                    priorityConcerns: [],
+                  })
+                }
+              />
+              <span>Let Tweenverse choose</span>
+              <small>Build a balanced five-segment read.</small>
+            </label>
+            <label className={guidance.mode === "guided" ? "active" : ""}>
+              <input
+                type="radio"
+                name="audience-mode"
+                aria-label="Guide the audience"
+                checked={guidance.mode === "guided"}
+                onChange={() => updateGuidance({ ...guidance, mode: "guided" })}
+              />
+              <span>Guide the audience</span>
+              <small>Set the public and the pressures that matter.</small>
+            </label>
+          </div>
+
+          {guidance.mode === "guided" ? (
+            <div className="audience-guidance-fields">
+              <label className="audience-builder-field" htmlFor="audience-brief">
+                <span>Describe the public</span>
+                <textarea
+                  id="audience-brief"
+                  value={guidance.brief ?? ""}
+                  onChange={(event) =>
+                    updateGuidance({
+                      ...guidance,
+                      brief: event.target.value.slice(0, 360) || undefined,
+                    })
+                  }
+                  rows={3}
+                  placeholder="Working parents in secondary cities, concerned about household transport costs."
+                  aria-label="Describe the public"
+                  aria-describedby="audience-brief-help"
+                />
+                <small id="audience-brief-help">
+                  {hasAudienceBrief
+                    ? "Ready to review the five segments."
+                    : "Describe who you want to understand to review the five segments."}
+                </small>
+              </label>
+
+              <div className="audience-review-action">
+                <button
+                  type="button"
+                  className="audience-preview-button"
+                  onClick={previewAudience}
+                  disabled={!canPreview}
+                >
+                  {isPreviewing ? "Building the audience…" : "Review the five segments"}
+                </button>
+                <small className="audience-preview-note">
+                  This checks the proposed audience only; it does not start the simulation.
+                </small>
+                {error ? (
+                  <p className="lab-error" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {preview ? (
@@ -199,7 +226,7 @@ export function AudienceBuilder({
         </div>
       ) : null}
 
-      {error ? (
+      {error && guidance.mode !== "guided" ? (
         <p className="lab-error" role="alert">
           {error}
         </p>

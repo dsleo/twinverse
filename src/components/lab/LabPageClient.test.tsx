@@ -27,7 +27,12 @@ describe("LabPageClient", () => {
     await userEvent.click(screen.getByLabelText("Guide the audience"));
 
     expect(await screen.findByText("Describe the public")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Review the five segments" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review the five segments" })).toBeDisabled();
+    await userEvent.type(
+      screen.getByLabelText("Describe the public"),
+      "Working parents in secondary cities",
+    );
+    expect(screen.getByRole("button", { name: "Review the five segments" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Run simulation" })).not.toBeInTheDocument();
   });
 
@@ -57,6 +62,10 @@ describe("LabPageClient", () => {
 
     render(<LabPageClient fixedMode="manual" />);
     await userEvent.click(screen.getByLabelText("Guide the audience"));
+    await userEvent.type(
+      screen.getByLabelText("Describe the public"),
+      "Working parents in secondary cities",
+    );
     await userEvent.click(await screen.findByRole("button", { name: "Review the five segments" }));
 
     expect(await screen.findByRole("button", { name: "Accept" })).toBeInTheDocument();
@@ -65,6 +74,8 @@ describe("LabPageClient", () => {
     await userEvent.click(screen.getByRole("button", { name: "Accept" }));
 
     expect(screen.getByText("Audience accepted")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review the five segments" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Guide the audience")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeInTheDocument();
   });
 

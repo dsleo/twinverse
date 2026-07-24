@@ -17,7 +17,7 @@ describe("LabPageClient", () => {
     expect(screen.queryByText("Choose the prompt source")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Paste a question/i)).toBeInTheDocument();
     expect(screen.queryByText(/Le Figaro du jour/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Who should this represent?")).toBeInTheDocument();
+    expect(screen.getByText("Set the people behind the result.")).toBeInTheDocument();
   });
 
   it("opens guided audience controls only when requested", async () => {
@@ -32,11 +32,11 @@ describe("LabPageClient", () => {
     );
 
     render(<LabPageClient fixedMode="manual" />);
-    expect(screen.queryByText("Priority concerns")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set the information lens")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByLabelText("Guide the audience"));
 
-    expect(await screen.findByText("Priority concerns")).toBeInTheDocument();
+    expect(await screen.findByText("Set the information lens")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview audience" })).toBeInTheDocument();
   });
 

@@ -169,36 +169,40 @@ export function AudienceBuilder({
 
   return (
     <fieldset className="audience-builder" disabled={disabled}>
-      <legend>
-        <span className="section-label">Audience</span>
-        <strong>Who should this represent?</strong>
+      <legend className="audience-builder-header">
+        <span className="section-label">Audience lens</span>
+        <strong>Set the people behind the result.</strong>
+        <small>Start broad, or direct the simulation toward a specific public.</small>
       </legend>
 
-      <label className="audience-builder-field">
-        <span>Audience lens</span>
-        <select
-          value={audiencePreset}
-          onChange={(event) =>
-            onAudiencePresetChange(event.target.value as AudiencePreset)
-          }
-        >
-          {Object.entries(audiencePresetLabels).map(([id, label]) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <small>{audiencePresetDescriptions[audiencePreset]}</small>
-      </label>
+      <div className="audience-lens-row">
+        <label className="audience-builder-field">
+          <span>Starting point</span>
+          <select
+            value={audiencePreset}
+            onChange={(event) =>
+              onAudiencePresetChange(event.target.value as AudiencePreset)
+            }
+          >
+            {Object.entries(audiencePresetLabels).map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p>{audiencePresetDescriptions[audiencePreset]}</p>
+      </div>
 
       <div
         className="audience-mode-toggle"
         role="radiogroup"
         aria-label="Audience mode"
       >
-        <label>
+        <label className={guidance.mode === "automatic" ? "active" : ""}>
           <input
             type="radio"
+            aria-label="Let Tweenverse choose"
             checked={guidance.mode === "automatic"}
             onChange={() =>
               updateGuidance({
@@ -209,22 +213,25 @@ export function AudienceBuilder({
               })
             }
           />
-          Let Tweenverse choose
+          <span>Let Tweenverse choose</span>
+          <small>Build a balanced five-segment read.</small>
         </label>
-        <label>
+        <label className={guidance.mode === "guided" ? "active" : ""}>
           <input
             type="radio"
+            aria-label="Guide the audience"
             checked={guidance.mode === "guided"}
             onChange={() => updateGuidance({ ...guidance, mode: "guided" })}
           />
-          Guide the audience
+          <span>Guide the audience</span>
+          <small>Set the public and the pressures that matter.</small>
         </label>
       </div>
 
       {guidance.mode === "guided" ? (
         <div className="audience-guidance-fields">
           <label className="audience-builder-field">
-            <span>Who should this represent?</span>
+            <span>Describe the public</span>
             <textarea
               value={guidance.brief ?? ""}
               onChange={(event) =>
@@ -234,7 +241,7 @@ export function AudienceBuilder({
                 })
               }
               rows={3}
-              placeholder="For example: working parents in secondary cities, concerned about household transport costs."
+              placeholder="Working parents in secondary cities, concerned about household transport costs."
             />
           </label>
 
@@ -311,7 +318,7 @@ export function AudienceBuilder({
           </div>
 
           <label className="audience-builder-field">
-            <span>Priority concerns</span>
+            <span>Set the information lens</span>
             <input
               value={(guidance.priorityConcerns ?? []).join(", ")}
               onChange={(event) =>
@@ -327,7 +334,7 @@ export function AudienceBuilder({
               placeholder="Household costs, local services, implementation"
             />
             <small>
-              Up to three concerns; they guide segmentation and source planning.
+              Up to three concerns that guide segment design and source selection.
             </small>
           </label>
 
@@ -344,10 +351,10 @@ export function AudienceBuilder({
 
       {preview ? (
         <section className="audience-proposal" aria-live="polite">
-          <div className="card-topline">
+          <div className="audience-proposal-heading">
             <div>
               <div className="section-label">Audience proposal</div>
-              <h3>Five segments for this question</h3>
+              <h3>Five ways this question may land.</h3>
             </div>
           </div>
           {preview.warnings.length ? (
@@ -357,21 +364,21 @@ export function AudienceBuilder({
               ))}
             </div>
           ) : null}
-          <div className="audience-proposal-grid">
+          <ol className="audience-proposal-grid">
             {preview.proposal.segments.map((segment) => {
               const count =
                 preview.eligibility.find(
                   (entry) => entry.segmentId === segment.id,
                 )?.eligiblePersonaCount ?? 0;
               return (
-                <article key={segment.id}>
+                <li key={segment.id}>
                   <strong>{segment.label}</strong>
                   <p>{segment.summary}</p>
                   <small>{count} eligible personas</small>
-                </article>
+                </li>
               );
             })}
-          </div>
+          </ol>
           <div className="audience-proposal-actions">
             <button
               type="button"

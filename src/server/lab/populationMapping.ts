@@ -5,7 +5,7 @@ import { logLabRun } from "./logging";
 import { callStructuredModel } from "./openaiStructured";
 import { type TokenUsage } from "./tokenAccounting";
 import { audiencePresetAffinityScore, audiencePresetDescription } from "./audiencePresets";
-import { metadataTaxonomy } from "./personaSample";
+import { planningMetadataTaxonomy } from "./personaSample";
 import {
   audiencePresetSchema,
   audienceGuidanceSchema,
@@ -134,9 +134,9 @@ export function buildMetadataValueFrequencies(personas: NormalizedPersona[]): Me
   return frequencies;
 }
 
-export function validateAudienceGuidanceAgainstTaxonomy(guidance: AudienceGuidance, personas: NormalizedPersona[]) {
+export function validateAudienceGuidanceAgainstTaxonomy(guidance: AudienceGuidance, _personas: NormalizedPersona[]) {
   const parsed = audienceGuidanceSchema.parse(guidance);
-  const taxonomy = metadataTaxonomy(personas);
+  const taxonomy = planningMetadataTaxonomy();
   for (const filter of [...parsed.include, ...parsed.avoid]) {
     const allowed = taxonomy[filter.family] ?? [];
     if (filter.values.some((value) => !allowed.includes(value))) {
@@ -146,9 +146,9 @@ export function validateAudienceGuidanceAgainstTaxonomy(guidance: AudienceGuidan
   return parsed;
 }
 
-export function validateSegmentDesignAgainstTaxonomy(design: PopulationSegmentDesign, personas: NormalizedPersona[]) {
+export function validateSegmentDesignAgainstTaxonomy(design: PopulationSegmentDesign, _personas: NormalizedPersona[]) {
   const parsed = populationSegmentDesignSchema.parse(design);
-  const taxonomy = metadataTaxonomy(personas);
+  const taxonomy = planningMetadataTaxonomy();
   for (const segment of parsed.segments) {
     for (const filter of [...segment.inclusionTags, ...segment.exclusionTags, ...segment.rankingSignals]) {
       const allowed = taxonomy[filter.family] ?? [];
@@ -440,7 +440,7 @@ export async function designPopulationSegments(
 ): Promise<SegmentDesignResult> {
   const audience = audiencePresetSchema.parse(audiencePreset);
   const guidance = audienceGuidanceSchema.parse(options?.guidance ?? { mode: "automatic" });
-  const taxonomy = metadataTaxonomy(cache.personas);
+  const taxonomy = planningMetadataTaxonomy();
   const system = [
     "You are an audience segmentation analyst.",
     "Return exactly five population segments.",

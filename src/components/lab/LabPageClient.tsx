@@ -266,6 +266,9 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (body?.error?.includes("uses an unknown attribute")) {
+          throw new Error("This audience proposal is no longer valid. Choose Change audience and review a new proposal before running it.");
+        }
         throw new Error(body?.error ?? "Unable to start the run.");
       }
 

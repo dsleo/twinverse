@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePersonaRow, refreshPersonaMetadata } from "./personaSample";
+import { normalizePersonaRow, planningMetadataTaxonomy, refreshPersonaMetadata } from "./personaSample";
 import type { NormalizedPersona } from "../../lib/labSchemas";
 
 describe("personaSample metadata derivation", () => {
@@ -96,5 +96,13 @@ describe("personaSample metadata derivation", () => {
       expect.arrayContaining(["proof_seeking", "institution_reliant"]),
     );
     expect(refreshed.assignmentMetadata.issue_salience_tags).toEqual(expect.arrayContaining(["public_services", "cost_of_living"]));
+  });
+
+  it("uses a stable planning taxonomy rather than values present in one cache sample", () => {
+    const taxonomy = planningMetadataTaxonomy();
+
+    expect(taxonomy.household_type).toContain("other_household");
+    expect(taxonomy.employment_class).toContain("self_employed");
+    expect(taxonomy.issue_salience_tags).toContain("public_policy");
   });
 });

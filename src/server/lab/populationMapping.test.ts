@@ -69,7 +69,7 @@ vi.mock("./openaiStructured", () => ({
   })),
 }));
 
-import { buildMetadataValueFrequencies, designPopulationSegments, mapPopulationToPanel, scorePersona } from "./populationMapping";
+import { buildMetadataValueFrequencies, designPopulationSegments, mapPopulationToPanel, scorePersona, validateSegmentDesignAgainstTaxonomy } from "./populationMapping";
 import { callStructuredModel } from "./openaiStructured";
 import type { PersonaCache, PopulationSegmentDesign, PopulationSegmentSpec } from "../../lib/labSchemas";
 
@@ -380,5 +380,22 @@ describe("mapPopulationToPanel", () => {
     expect(structured).toHaveBeenLastCalledWith(expect.objectContaining({ stageName: "PopulationMapperRepair" }));
     expect(result.data.segments[0].inclusionTags).toEqual([{ family: "employment_class", values: ["retired"] }]);
     expect(result.tokenUsage).toEqual({ inputTokens: 7, outputTokens: 5, totalTokens: 12, estimated: false });
+  });
+
+  it("validates against the stable metadata contract rather than one sample's values", () => {
+    const personas = [makePersona(1)];
+    const design: PopulationSegmentDesign = {
+      promptSummary: "Test",
+      topicDimensions: ["policy"],
+      globalRationale: "Test",
+      segments: Array.from({ length: 5 }, (_, index) =>
+        makeSegment({
+          id: `segment-${index}`,
+          inclusionTags: [{ family: "household_type", values: ["other_household"] }],
+        }),
+      ),
+    };
+
+    expect(() => validateSegmentDesignAgainstTaxonomy(design, personas)).not.toThrow();
   });
 });

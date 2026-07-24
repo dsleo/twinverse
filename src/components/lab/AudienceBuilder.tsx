@@ -244,27 +244,6 @@ export function AudienceBuilder({
             </div>
           </details>
 
-          <label className="audience-builder-field">
-            <span>Set the information lens</span>
-            <input
-              value={(guidance.priorityConcerns ?? []).join(", ")}
-              onChange={(event) =>
-                updateGuidance({
-                  ...guidance,
-                  priorityConcerns: event.target.value
-                    .split(",")
-                    .map((entry) => entry.trim())
-                    .filter(Boolean)
-                    .slice(0, 3),
-                })
-              }
-              placeholder="Household costs, local services, implementation"
-            />
-            <small>
-              Up to three concerns that guide segment design and source selection.
-            </small>
-          </label>
-
           <button
             type="button"
             className="quiet-button audience-preview-button"

@@ -32,11 +32,11 @@ describe("LabPageClient", () => {
     );
 
     render(<LabPageClient fixedMode="manual" />);
-    expect(screen.queryByText("Set the information lens")).not.toBeInTheDocument();
+    expect(screen.queryByText("Describe the public")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByLabelText("Guide the audience"));
 
-    expect(await screen.findByText("Set the information lens")).toBeInTheDocument();
+    expect(await screen.findByText("Describe the public")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview audience" })).toBeInTheDocument();
   });
 

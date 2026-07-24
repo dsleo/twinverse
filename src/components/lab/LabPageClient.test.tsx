@@ -74,8 +74,8 @@ describe("LabPageClient", () => {
     await userEvent.click(screen.getByRole("button", { name: "Accept" }));
 
     expect(screen.getByText("Audience accepted")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Review the five segments" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Guide the audience")).not.toBeInTheDocument();
+    expect(screen.getByText("Five ways this question may land.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change audience" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeInTheDocument();
   });
 

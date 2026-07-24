@@ -262,19 +262,15 @@
   line-height: 1.4;
 }
 
-.audience-approval,
-.audience-accepted {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.85rem 1.25rem;
-  align-items: center;
-  justify-content: space-between;
+.audience-approval {
+  display: grid;
+  justify-items: start;
+  gap: 0.7rem;
   padding: 1rem 0 0;
   border-top: 1px solid var(--line-strong);
 }
 
-.audience-approval p,
-.audience-accepted p {
+.audience-approval p {
   margin: 0;
   color: var(--text);
   font-size: 0.9rem;
@@ -285,6 +281,15 @@
   display: inline-flex;
   gap: 0.75rem;
   align-items: center;
+}
+
+.audience-approval > div:has(.section-label) {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.audience-approval .section-label {
+  color: var(--accent);
 }
 
 .audience-accept,
@@ -326,15 +331,6 @@
   text-decoration: underline;
   text-decoration-color: var(--line-strong);
   text-underline-offset: 0.25em;
-}
-
-.audience-accepted {
-  margin-top: 0.15rem;
-  padding-top: 1.1rem;
-}
-
-.audience-accepted .section-label {
-  color: var(--accent);
 }
 
 .audience-proposal {

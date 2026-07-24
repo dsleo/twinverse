@@ -17,7 +17,7 @@ describe("LabPageClient", () => {
     expect(screen.queryByText("Choose the prompt source")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Paste a question/i)).toBeInTheDocument();
     expect(screen.queryByText(/Le Figaro du jour/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Set the people behind the result.")).toBeInTheDocument();
+    expect(screen.getByText("Choose how to build the audience.")).toBeInTheDocument();
   });
 
   it("opens guided audience controls only when requested", async () => {

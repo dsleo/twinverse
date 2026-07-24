@@ -63,8 +63,7 @@
   letter-spacing: -0.04em;
 }
 
-.audience-builder-header small,
-.audience-lens-row p {
+.audience-builder-header small {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
@@ -83,14 +82,6 @@
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 500;
-}
-
-.audience-lens-row {
-  display: grid;
-  grid-template-columns: minmax(14rem, 0.72fr) minmax(0, 1.28fr);
-  gap: clamp(1rem, 3vw, 3rem);
-  align-items: end;
-  max-width: 56rem;
 }
 
 .audience-mode-toggle,
@@ -169,6 +160,79 @@
   font-family: var(--font-display);
   font-size: 1.05rem;
   letter-spacing: -0.02em;
+}
+
+.audience-builder select,
+.audience-builder input,
+.audience-builder textarea {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.25rem;
+  outline: none;
+  background: color-mix(in oklch, var(--surface-raised) 88%, var(--bg) 12%);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 550;
+  line-height: 1.45;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.audience-builder select,
+.audience-builder input {
+  min-height: 2.8rem;
+  padding: 0.62rem 2.4rem 0.62rem 0.8rem;
+}
+
+.audience-builder select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 1.1rem) 1.18rem, calc(100% - 0.82rem) 1.18rem;
+  background-size: 0.32rem 0.32rem, 0.32rem 0.32rem;
+  background-repeat: no-repeat;
+}
+
+.audience-builder textarea {
+  min-height: 7.25rem;
+  padding: 0.85rem;
+  resize: vertical;
+}
+
+.audience-builder select:focus,
+.audience-builder input:focus,
+.audience-builder textarea:focus {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.audience-constraints {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.audience-constraints summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.audience-constraints summary span {
+  margin-left: 0.45rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.audience-constraints > p {
+  max-width: 42rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .audience-filter-picker,
@@ -282,7 +346,6 @@
 }
 
 @media (max-width: 720px) {
-  .audience-lens-row,
   .audience-filter-picker,
   .audience-filter-columns {
     grid-template-columns: 1fr;

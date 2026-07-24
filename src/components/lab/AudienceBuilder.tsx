@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  audiencePresetDescriptions,
-  audiencePresetLabels,
-} from "../../lib/labAudience";
 import type {
   AudienceGuidance,
-  AudiencePreset,
   LabInput,
   MetadataTagFilter,
   PopulationSegmentDesign,
@@ -21,11 +16,9 @@ type Preview = {
 
 type AudienceBuilderProps = {
   input: LabInput;
-  audiencePreset: AudiencePreset;
   guidance: AudienceGuidance;
   approvedDesign?: PopulationSegmentDesign;
   disabled?: boolean;
-  onAudiencePresetChange: (value: AudiencePreset) => void;
   onGuidanceChange: (value: AudienceGuidance) => void;
   onApprovedDesignChange: (value?: PopulationSegmentDesign) => void;
 };
@@ -56,11 +49,9 @@ function filterLabel(filter: MetadataTagFilter) {
 
 export function AudienceBuilder({
   input,
-  audiencePreset,
   guidance,
   approvedDesign,
   disabled,
-  onAudiencePresetChange,
   onGuidanceChange,
   onApprovedDesignChange,
 }: AudienceBuilderProps) {
@@ -145,7 +136,7 @@ export function AudienceBuilder({
       const response = await fetch("/api/lab/audience-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input, audiencePreset, guidance }),
+        body: JSON.stringify({ input, audiencePreset: "france_general", guidance }),
       });
       const payload = (await response.json().catch(() => null)) as
         (Preview & { error?: string }) | null;
@@ -171,28 +162,9 @@ export function AudienceBuilder({
     <fieldset className="audience-builder" disabled={disabled}>
       <legend className="audience-builder-header">
         <span className="section-label">Audience lens</span>
-        <strong>Set the people behind the result.</strong>
-        <small>Start broad, or direct the simulation toward a specific public.</small>
+        <strong>Choose how to build the audience.</strong>
+        <small>Either let the simulation find the relevant public, or give it a clear direction.</small>
       </legend>
-
-      <div className="audience-lens-row">
-        <label className="audience-builder-field">
-          <span>Starting point</span>
-          <select
-            value={audiencePreset}
-            onChange={(event) =>
-              onAudiencePresetChange(event.target.value as AudiencePreset)
-            }
-          >
-            {Object.entries(audiencePresetLabels).map(([id, label]) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p>{audiencePresetDescriptions[audiencePreset]}</p>
-      </div>
 
       <div
         className="audience-mode-toggle"
@@ -245,77 +217,32 @@ export function AudienceBuilder({
             />
           </label>
 
-          <div className="audience-filter-picker">
-            <label className="audience-builder-field">
-              <span>Attribute</span>
-              <select
-                value={family}
-                onChange={(event) => setFamily(event.target.value)}
-              >
-                {families.map((entry) => (
-                  <option key={entry} value={entry}>
-                    {familyLabels[entry]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="audience-builder-field">
-              <span>Value</span>
-              <select
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-              >
-                {values.map((entry) => (
-                  <option key={entry} value={entry}>
-                    {readableValue(entry)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="audience-filter-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => addFilter("include")}
-                disabled={!value || guidance.include.length >= 3}
-              >
-                Must include
-              </button>
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => addFilter("avoid")}
-                disabled={!value || guidance.avoid.length >= 3}
-              >
-                Avoid
-              </button>
+          <details className="audience-constraints">
+            <summary>Add a boundary <span>Optional</span></summary>
+            <p>Use a dataset attribute only when the audience must include it or should not be dominated by it.</p>
+            <div className="audience-filter-picker">
+              <label className="audience-builder-field">
+                <span>Attribute</span>
+                <select value={family} onChange={(event) => setFamily(event.target.value)}>
+                  {families.map((entry) => <option key={entry} value={entry}>{familyLabels[entry]}</option>)}
+                </select>
+              </label>
+              <label className="audience-builder-field">
+                <span>Value</span>
+                <select value={value} onChange={(event) => setValue(event.target.value)}>
+                  {values.map((entry) => <option key={entry} value={entry}>{readableValue(entry)}</option>)}
+                </select>
+              </label>
+              <div className="audience-filter-actions">
+                <button type="button" className="quiet-button" onClick={() => addFilter("include")} disabled={!value || guidance.include.length >= 3}>Must include</button>
+                <button type="button" className="quiet-button" onClick={() => addFilter("avoid")} disabled={!value || guidance.avoid.length >= 3}>Avoid</button>
+              </div>
             </div>
-          </div>
-
-          <div className="audience-filter-columns">
-            <FilterList
-              title="Must include"
-              filters={guidance.include}
-              onRemove={(index) =>
-                updateGuidance({
-                  ...guidance,
-                  include: guidance.include.filter(
-                    (_, entry) => entry !== index,
-                  ),
-                })
-              }
-            />
-            <FilterList
-              title="Avoid over-representing"
-              filters={guidance.avoid}
-              onRemove={(index) =>
-                updateGuidance({
-                  ...guidance,
-                  avoid: guidance.avoid.filter((_, entry) => entry !== index),
-                })
-              }
-            />
-          </div>
+            <div className="audience-filter-columns">
+              <FilterList title="Must include" filters={guidance.include} onRemove={(index) => updateGuidance({ ...guidance, include: guidance.include.filter((_, entry) => entry !== index) })} />
+              <FilterList title="Avoid over-representing" filters={guidance.avoid} onRemove={(index) => updateGuidance({ ...guidance, avoid: guidance.avoid.filter((_, entry) => entry !== index) })} />
+            </div>
+          </details>
 
           <label className="audience-builder-field">
             <span>Set the information lens</span>

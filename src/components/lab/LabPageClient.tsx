@@ -6,7 +6,7 @@ import { AudienceBuilder } from "./AudienceBuilder";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
 import { TvAudienceResult } from "./TvAudienceResult";
 import { runModeLabels } from "../../lib/labAudience";
-import type { AudienceGuidance, AudiencePreset, DailyQuestionPreview, InputType, PersistedLabRun, PopulationSegmentDesign, RunMode } from "../../lib/labSchemas";
+import type { AudienceGuidance, DailyQuestionPreview, InputType, PersistedLabRun, PopulationSegmentDesign, RunMode } from "../../lib/labSchemas";
 
 type JumpCard = {
   id: string;
@@ -89,7 +89,6 @@ type LabPageClientProps = {
 export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClientProps) {
   const [mode, setMode] = useState<RunMode>(fixedMode ?? "manual");
   const [rawInput, setRawInput] = useState("Faut-il construire de nouvelles centrales nucléaires en France ?");
-  const [audiencePreset, setAudiencePreset] = useState<AudiencePreset>("france_general");
   const [audienceGuidance, setAudienceGuidance] = useState<AudienceGuidance>({ mode: "automatic", include: [], avoid: [], priorityConcerns: [] });
   const [approvedSegmentDesign, setApprovedSegmentDesign] = useState<PopulationSegmentDesign | undefined>();
   const [runId, setRunId] = useState<string | null>(null);
@@ -260,7 +259,6 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
           rawInput: mode === "manual" ? rawInput : undefined,
           inputType: isTvMode ? "other" : ("question" satisfies InputType),
           date: targetDate,
-          audiencePreset: mode === "manual" ? audiencePreset : undefined,
           audienceGuidance: mode === "manual" ? audienceGuidance : undefined,
           approvedSegmentDesign: mode === "manual" ? approvedSegmentDesign : undefined,
         }),
@@ -483,14 +481,9 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
           {mode === "manual" ? (
             <AudienceBuilder
               input={{ rawInput, inputType: "question" }}
-              audiencePreset={audiencePreset}
               guidance={audienceGuidance}
               approvedDesign={approvedSegmentDesign}
               disabled={isRunActive}
-              onAudiencePresetChange={(value) => {
-                setAudiencePreset(value);
-                setApprovedSegmentDesign(undefined);
-              }}
               onGuidanceChange={setAudienceGuidance}
               onApprovedDesignChange={setApprovedSegmentDesign}
             />

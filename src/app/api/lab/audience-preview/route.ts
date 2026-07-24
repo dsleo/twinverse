@@ -10,6 +10,7 @@ import {
   designPopulationSegments,
   segmentEligibilityCounts,
   validateAudienceGuidanceAgainstTaxonomy,
+  validateSegmentDesignAgainstTaxonomy,
 } from "../../../../server/lab/populationMapping";
 import { loadPersonaSample } from "../../../../server/lab/personaSample";
 
@@ -49,9 +50,13 @@ export async function POST(request: Request) {
       body.audiencePreset,
       { guidance },
     );
+    const proposal = validateSegmentDesignAgainstTaxonomy(
+      designed.data,
+      cache.personas,
+    );
     const eligibility = segmentEligibilityCounts(
       cache.personas,
-      designed.data.segments,
+      proposal.segments,
       body.audiencePreset,
       guidance,
     );
@@ -59,7 +64,7 @@ export async function POST(request: Request) {
       .filter((entry) => entry.eligiblePersonaCount < 2)
       .map(
         (entry) =>
-          `“${designed.data.segments.find((segment) => segment.id === entry.segmentId)?.label ?? entry.segmentId}” has too few eligible personas.`,
+          `“${proposal.segments.find((segment) => segment.id === entry.segmentId)?.label ?? entry.segmentId}” has too few eligible personas.`,
       );
     const totalEligible = audienceEligiblePersonaCount(cache.personas, guidance);
     if (totalEligible < 20) {
@@ -69,7 +74,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      proposal: designed.data,
+      proposal,
       eligibility,
       totalEligiblePersonaCount: totalEligible,
       warnings,

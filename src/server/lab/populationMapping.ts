@@ -160,6 +160,15 @@ export function validateSegmentDesignAgainstTaxonomy(design: PopulationSegmentDe
   return parsed;
 }
 
+function combineTokenUsage(...usages: TokenUsage[]): TokenUsage {
+  return {
+    inputTokens: usages.reduce((total, usage) => total + usage.inputTokens, 0),
+    outputTokens: usages.reduce((total, usage) => total + usage.outputTokens, 0),
+    totalTokens: usages.reduce((total, usage) => total + usage.totalTokens, 0),
+    estimated: usages.some((usage) => usage.estimated),
+  };
+}
+
 export function segmentEligibilityCounts(
   personas: NormalizedPersona[],
   segments: PopulationSegmentSpec[],
@@ -443,7 +452,43 @@ export async function designPopulationSegments(
   ].join(" ");
   const user = JSON.stringify({ input, audiencePreset: audience, audienceDescription: audiencePresetDescription(audience), audienceGuidance: guidance, promptDimensions: promptDimensions(input.rawInput), metadataTaxonomy: taxonomy }, null, 2);
   const mapped = await callStructuredModel({ schema: populationMapSchema, schemaName: "population_segments", stageName: "PopulationMapperAgent", system, user, runId: options?.runId, traceLabel: "population_mapping" });
-  return { data: mapped.data, diagnostics: mapped.diagnostics, tokenUsage: mapped.tokenUsage };
+
+  try {
+    return {
+      data: validateSegmentDesignAgainstTaxonomy(mapped.data, cache.personas),
+      diagnostics: mapped.diagnostics,
+      tokenUsage: mapped.tokenUsage,
+    };
+  } catch (validationError) {
+    const reason = validationError instanceof Error ? validationError.message : "The plan does not match the metadata taxonomy.";
+    logLabRun(options?.runId ?? "population-mapper", "population-mapping-plan-repair", {
+      reason,
+    });
+
+    const repaired = await callStructuredModel({
+      schema: populationMapSchema,
+      schemaName: "population_segments_repair",
+      stageName: "PopulationMapperRepair",
+      system: [
+        system,
+        "The previous plan failed metadata validation. Return a corrected replacement plan.",
+        "For every inclusionTags, exclusionTags, and rankingSignals entry, copy both the family and values exactly from the provided metadata taxonomy.",
+      ].join(" "),
+      user: JSON.stringify({
+        originalRequest: JSON.parse(user),
+        invalidPlan: mapped.data,
+        validationError: reason,
+      }, null, 2),
+      runId: options?.runId,
+      traceLabel: "population_mapping_repair",
+    });
+
+    return {
+      data: validateSegmentDesignAgainstTaxonomy(repaired.data, cache.personas),
+      diagnostics: repaired.diagnostics,
+      tokenUsage: combineTokenUsage(mapped.tokenUsage, repaired.tokenUsage),
+    };
+  }
 }
 
 export async function mapPopulationToPanel(

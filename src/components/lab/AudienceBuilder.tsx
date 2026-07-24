@@ -172,9 +172,7 @@ export function AudienceBuilder({
   return (
     <fieldset className="audience-builder" disabled={disabled}>
       <legend className="audience-builder-header">
-        <span className="section-label">Audience lens</span>
-        <strong>Choose how to build the audience.</strong>
-        <small>Either let the simulation find the relevant public, or give it a clear direction.</small>
+        <span className="section-label">Audience</span>
       </legend>
 
       <div
@@ -230,7 +228,7 @@ export function AudienceBuilder({
 
           <details className="audience-constraints">
             <summary>Add a boundary <span>Optional</span></summary>
-            <p>Use a dataset attribute only when the audience must include it or should not be dominated by it.</p>
+            <p>Use this only when the audience must include a trait, or should not be dominated by one.</p>
             <div className="audience-filter-picker">
               <label className="audience-builder-field">
                 <span>Attribute</span>

@@ -51,23 +51,7 @@
 
 .audience-builder-header {
   display: grid;
-  max-width: 42rem;
-  gap: 0.3rem;
   padding: 0;
-}
-
-.audience-builder-header strong {
-  font-family: var(--font-display);
-  font-size: clamp(1.35rem, 2vw, 1.8rem);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
-}
-
-.audience-builder-header small {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.45;
 }
 
 .audience-builder-field {
@@ -251,6 +235,31 @@
 .audience-filter-actions {
   align-self: end;
   gap: 0.5rem;
+}
+
+.audience-filter-actions .quiet-button {
+  min-height: 2.8rem;
+  padding: 0.55rem 0.72rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.2rem;
+  color: var(--text);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.audience-filter-actions .quiet-button:first-child {
+  border-color: color-mix(in oklch, var(--line-strong) 45%, var(--accent) 55%);
+  color: var(--accent);
+}
+
+.audience-filter-actions .quiet-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--surface-raised) 80%, var(--accent-soft) 20%);
+}
+
+.audience-filter-actions .quiet-button:disabled {
+  opacity: 0.4;
 }
 
 .audience-filter-list {
@@ -470,6 +479,14 @@
   .audience-proposal-grid li:nth-child(odd) {
     padding-left: 0;
     border-left: 0;
+  }
+
+  .audience-proposal-grid li:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .audience-filter-list {
+    min-height: auto;
   }
 }
 

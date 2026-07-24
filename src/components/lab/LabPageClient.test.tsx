@@ -21,16 +21,6 @@ describe("LabPageClient", () => {
   });
 
   it("opens guided audience controls only when requested", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (String(input).includes("/api/lab/audience-options")) {
-          return { ok: true, json: async () => ({ taxonomy: { life_stage: ["midcareer"] } }) } as Response;
-        }
-        throw new Error(`Unexpected request: ${input}`);
-      }) as unknown as typeof fetch,
-    );
-
     render(<LabPageClient fixedMode="manual" />);
     expect(screen.queryByText("Describe the public")).not.toBeInTheDocument();
 
@@ -46,9 +36,6 @@ describe("LabPageClient", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.includes("/api/lab/audience-options")) {
-          return { ok: true, json: async () => ({ taxonomy: { life_stage: ["midcareer"] } }) } as Response;
-        }
         if (url.includes("/api/lab/audience-preview")) {
           return {
             ok: true,

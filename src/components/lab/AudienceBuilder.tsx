@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import type {
   AudienceGuidance,
   LabInput,
-  MetadataTagFilter,
   PopulationSegmentDesign,
 } from "../../lib/labSchemas";
 
@@ -23,30 +22,6 @@ type AudienceBuilderProps = {
   onApprovedDesignChange: (value?: PopulationSegmentDesign) => void;
 };
 
-const familyLabels: Record<string, string> = {
-  life_stage: "Life stage",
-  household_type: "Household",
-  employment_class: "Employment",
-  income_posture: "Income posture",
-  housing_status: "Housing",
-  mobility_profile: "Mobility",
-  urbanicity: "Place type",
-  region_family: "Region",
-  public_service_dependency: "Public-service reliance",
-  policy_exposure_tags: "Policy exposure",
-  economic_vulnerability_tags: "Economic pressure",
-  trust_orientation_tags: "Trust orientation",
-  issue_salience_tags: "Issue salience",
-};
-
-function readableValue(value: string) {
-  return value.replaceAll("_", " ");
-}
-
-function filterLabel(filter: MetadataTagFilter) {
-  return `${familyLabels[filter.family] ?? filter.family}: ${filter.values.map(readableValue).join(", ")}`;
-}
-
 export function AudienceBuilder({
   input,
   guidance,
@@ -55,78 +30,14 @@ export function AudienceBuilder({
   onGuidanceChange,
   onApprovedDesignChange,
 }: AudienceBuilderProps) {
-  const [taxonomy, setTaxonomy] = useState<Record<string, string[]>>({});
-  const [family, setFamily] = useState("life_stage");
-  const [value, setValue] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const families = useMemo(
-    () => Object.keys(taxonomy).filter((key) => familyLabels[key]),
-    [taxonomy],
-  );
-  const values = taxonomy[family] ?? [];
-
-  useEffect(() => {
-    if (guidance.mode !== "guided" || Object.keys(taxonomy).length > 0) {
-      return;
-    }
-    let cancelled = false;
-    void fetch("/api/lab/audience-options", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error("Unable to load audience attributes.");
-        return response.json() as Promise<{
-          taxonomy: Record<string, string[]>;
-        }>;
-      })
-      .then((data) => {
-        if (!cancelled) setTaxonomy(data.taxonomy);
-      })
-      .catch((nextError) => {
-        if (!cancelled)
-          setError(
-            nextError instanceof Error
-              ? nextError.message
-              : "Unable to load audience attributes.",
-          );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [guidance.mode, taxonomy]);
-
-  useEffect(() => {
-    if (families.length && !families.includes(family)) {
-      setFamily(families[0]);
-    }
-  }, [families, family]);
-
-  useEffect(() => {
-    setValue(values[0] ?? "");
-  }, [family, values]);
 
   function updateGuidance(next: AudienceGuidance) {
     setPreview(null);
     onApprovedDesignChange(undefined);
     onGuidanceChange(next);
-  }
-
-  function addFilter(target: "include" | "avoid") {
-    if (!value || guidance[target].length >= 3) return;
-    const filter = {
-      family: family as MetadataTagFilter["family"],
-      values: [value],
-    };
-    if (
-      guidance[target].some(
-        (entry) =>
-          entry.family === filter.family && entry.values.includes(value),
-      )
-    )
-      return;
-    updateGuidance({ ...guidance, [target]: [...guidance[target], filter] });
   }
 
   function acceptAudience() {
@@ -226,33 +137,6 @@ export function AudienceBuilder({
             />
           </label>
 
-          <details className="audience-constraints">
-            <summary>Add a boundary <span>Optional</span></summary>
-            <p>Use this only when the audience must include a trait, or should not be dominated by one.</p>
-            <div className="audience-filter-picker">
-              <label className="audience-builder-field">
-                <span>Attribute</span>
-                <select value={family} onChange={(event) => setFamily(event.target.value)}>
-                  {families.map((entry) => <option key={entry} value={entry}>{familyLabels[entry]}</option>)}
-                </select>
-              </label>
-              <label className="audience-builder-field">
-                <span>Value</span>
-                <select value={value} onChange={(event) => setValue(event.target.value)}>
-                  {values.map((entry) => <option key={entry} value={entry}>{readableValue(entry)}</option>)}
-                </select>
-              </label>
-              <div className="audience-filter-actions">
-                <button type="button" className="quiet-button" onClick={() => addFilter("include")} disabled={!value || guidance.include.length >= 3}>Must include</button>
-                <button type="button" className="quiet-button" onClick={() => addFilter("avoid")} disabled={!value || guidance.avoid.length >= 3}>Avoid</button>
-              </div>
-            </div>
-            <div className="audience-filter-columns">
-              <FilterList title="Must include" filters={guidance.include} onRemove={(index) => updateGuidance({ ...guidance, include: guidance.include.filter((_, entry) => entry !== index) })} />
-              <FilterList title="Avoid over-representing" filters={guidance.avoid} onRemove={(index) => updateGuidance({ ...guidance, avoid: guidance.avoid.filter((_, entry) => entry !== index) })} />
-            </div>
-          </details>
-
           <button
             type="button"
             className="audience-preview-button"
@@ -321,34 +205,5 @@ export function AudienceBuilder({
         </p>
       ) : null}
     </fieldset>
-  );
-}
-
-function FilterList({
-  title,
-  filters,
-  onRemove,
-}: {
-  title: string;
-  filters: MetadataTagFilter[];
-  onRemove: (index: number) => void;
-}) {
-  return (
-    <div className="audience-filter-list">
-      <strong>{title}</strong>
-      {filters.length ? (
-        filters.map((filter, index) => (
-          <button
-            type="button"
-            key={`${filter.family}-${filter.values.join("-")}`}
-            onClick={() => onRemove(index)}
-          >
-            {filterLabel(filter)} <span aria-hidden>×</span>
-          </button>
-        ))
-      ) : (
-        <p>None selected</p>
-      )}
-    </div>
   );
 }

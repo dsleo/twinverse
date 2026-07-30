@@ -5,14 +5,24 @@ import { buildContextPacks } from "./contextPacks";
 import { logLabRun, logLabStage, logLabTokenTotals } from "./logging";
 import { createRunRecord, readRun, writeRun } from "./persistence";
 import { loadPersonaSample } from "./personaSample";
-import { designPopulationSegments, mapPopulationToPanel } from "./populationMapping";
+import { approvedSegmentDesignResult, designPopulationSegments, mapPopulationToPanel } from "./populationMapping";
 import { planSegmentResearch } from "./researchPlanner";
 import { routeSourcesBySegment } from "./sourceRouting";
 import { buildReactionsForSegment } from "./reactions";
 import { retrieveSources } from "./retrieval";
 import { executeTvAudienceRun } from "./tvPipeline";
 import { addTokenUsage, createTokenTotals } from "./tokenAccounting";
-import { type AudiencePreset, labInputSchema, type LabInput, type PersistedLabRun, type PromptSource, type RunMode, type StageId } from "../../lib/labSchemas";
+import {
+  type AudienceGuidance,
+  type AudiencePreset,
+  labInputSchema,
+  type LabInput,
+  type PersistedLabRun,
+  type PopulationSegmentDesign,
+  type PromptSource,
+  type RunMode,
+  type StageId,
+} from "../../lib/labSchemas";
 
 type SettledTask<T> =
   | { ok: true; value: T }
@@ -29,12 +39,16 @@ export async function createLabRun({
   input,
   mode,
   audiencePreset,
+  audienceGuidance,
+  approvedSegmentDesign,
   promptSnapshot,
   promptSource,
 }: {
   input: LabInput;
   mode: RunMode;
   audiencePreset: AudiencePreset;
+  audienceGuidance?: AudienceGuidance;
+  approvedSegmentDesign?: PopulationSegmentDesign;
   promptSnapshot: string;
   promptSource?: PromptSource;
 }) {
@@ -43,6 +57,8 @@ export async function createLabRun({
     input: parsed,
     mode,
     audiencePreset,
+    audienceGuidance,
+    approvedSegmentDesign,
     promptSnapshot,
     promptSource,
   });
@@ -115,12 +131,25 @@ export async function executeLabRun(runId: string) {
     await persistRun();
 
     const cache = await loadPersonaSample();
-    const designed = await designPopulationSegments(currentRun.input, cache, currentRun.audiencePreset, { runId });
+    const designed = currentRun.approvedSegmentDesign
+      ? approvedSegmentDesignResult(currentRun.approvedSegmentDesign)
+      : await designPopulationSegments(currentRun.input, cache, currentRun.audiencePreset, {
+          runId,
+          guidance: currentRun.audienceGuidance,
+        });
     addTokenUsage(tokenTotals, designed.tokenUsage);
     setStageStatus("retrieval", "running", { summary: "Planning and collecting source signals for the defined segments." });
     await persistRun();
-    const researchPlanTask = settleTask(planSegmentResearch(currentRun.input, designed.data.segments, { runId }));
-    const mappingTask = settleTask(mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset, { runId, design: designed }));
+    const researchPlanTask = settleTask(
+      planSegmentResearch(currentRun.input, designed.data.segments, { runId, guidance: currentRun.audienceGuidance }),
+    );
+    const mappingTask = settleTask(
+      mapPopulationToPanel(currentRun.input, cache, currentRun.audiencePreset, {
+        runId,
+        design: designed,
+        guidance: currentRun.audienceGuidance,
+      }),
+    );
     const planned = await researchPlanTask;
     if (!planned.ok) throw planned.error;
     addTokenUsage(tokenTotals, planned.value.tokenUsage);
@@ -145,6 +174,8 @@ export async function executeLabRun(runId: string) {
         panelSize: String(mapped.panel.length),
         sampleVersion: cache.sampleVersion,
         audiencePreset: currentRun.audiencePreset,
+        guidanceMode: currentRun.audienceGuidance.mode,
+        approvedDesign: String(Boolean(currentRun.approvedSegmentDesign)),
       },
     });
     await persistRun();

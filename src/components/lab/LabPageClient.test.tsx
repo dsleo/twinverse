@@ -17,7 +17,66 @@ describe("LabPageClient", () => {
     expect(screen.queryByText("Choose the prompt source")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Paste a question/i)).toBeInTheDocument();
     expect(screen.queryByText(/Le Figaro du jour/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Segments and panel selection reflect a general France-wide audience mix\./i)).not.toBeInTheDocument();
+    expect(screen.getByText("Let Tweenverse choose")).toBeInTheDocument();
+  });
+
+  it("opens guided audience controls only when requested", async () => {
+    render(<LabPageClient fixedMode="manual" />);
+    expect(screen.queryByText("Describe the public")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText("Guide the audience"));
+
+    expect(await screen.findByText("Describe the public")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review the five segments" })).toBeDisabled();
+    await userEvent.type(
+      screen.getByLabelText("Describe the public"),
+      "Working parents in secondary cities",
+    );
+    expect(screen.getByRole("button", { name: "Review the five segments" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Run simulation" })).not.toBeInTheDocument();
+  });
+
+  it("requires audience acceptance before exposing the simulation action", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/lab/audience-preview")) {
+          return {
+            ok: true,
+            json: async () => ({
+              proposal: {
+                promptSummary: "Test proposal",
+                topicDimensions: ["energy"],
+                globalRationale: "Five distinct audience reads.",
+                segments: Array.from({ length: 5 }, (_, index) => ({ id: `segment-${index}`, label: `Segment ${index + 1}`, summary: "A distinct audience read.", concerns: ["cost"], informationNeeds: ["impact"], inclusionTags: [{ family: "life_stage", values: ["midcareer"] }], exclusionTags: [], preferredDiversityHints: [], rankingSignals: [], rankingCriteria: ["cost"] })),
+              },
+              eligibility: Array.from({ length: 5 }, (_, index) => ({ segmentId: `segment-${index}`, eligiblePersonaCount: 25 })),
+              warnings: [],
+            }),
+          } as Response;
+        }
+        throw new Error(`Unexpected request: ${input}`);
+      }) as unknown as typeof fetch,
+    );
+
+    render(<LabPageClient fixedMode="manual" />);
+    await userEvent.click(screen.getByLabelText("Guide the audience"));
+    await userEvent.type(
+      screen.getByLabelText("Describe the public"),
+      "Working parents in secondary cities",
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Review the five segments" }));
+
+    expect(await screen.findByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run simulation" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    expect(screen.getByText("Audience accepted")).toBeInTheDocument();
+    expect(screen.getByText("Five ways this question may land.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change audience" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run simulation" })).toBeInTheDocument();
   });
 
   it("renders the Le Figaro mode as a read-only daily question flow", async () => {

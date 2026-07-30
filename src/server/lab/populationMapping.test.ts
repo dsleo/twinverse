@@ -65,11 +65,13 @@ vi.mock("./openaiStructured", () => ({
       ],
     },
     diagnostics: { name: "PopulationMapperAgent", model: "test-model", outputText: "{}" },
+    tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimated: false },
   })),
 }));
 
-import { buildMetadataValueFrequencies, mapPopulationToPanel, scorePersona } from "./populationMapping";
-import type { PersonaCache, PopulationSegmentSpec } from "../../lib/labSchemas";
+import { buildMetadataValueFrequencies, designPopulationSegments, mapPopulationToPanel, scorePersona, validateSegmentDesignAgainstTaxonomy } from "./populationMapping";
+import { callStructuredModel } from "./openaiStructured";
+import type { PersonaCache, PopulationSegmentDesign, PopulationSegmentSpec } from "../../lib/labSchemas";
 
 function makePersona(index: number, overrides: Partial<PersonaCache["personas"][number]> = {}): PersonaCache["personas"][number] {
   const employmentClasses = ["working_class", "service_employee", "retired", "executive_professional", "self_employed"] as const;
@@ -157,6 +159,26 @@ describe("mapPopulationToPanel", () => {
     expect(matched.eligible).toBe(true);
     expect(unmatched.eligible).toBe(false);
     expect(unmatched.reasons).toContain("no_inclusion_match");
+  });
+
+  it("applies guided inclusion filters as eligibility and avoids as a score penalty", () => {
+    const personas = [makePersona(1), makePersona(2)];
+    const frequencies = buildMetadataValueFrequencies(personas);
+    const segment = makeSegment({ inclusionTags: [{ family: "employment_class", values: ["retired"] }] });
+    const guidance = {
+      mode: "guided" as const,
+      include: [{ family: "employment_class" as const, values: ["retired"] }],
+      avoid: [{ family: "income_posture" as const, values: ["cost_sensitive"] }],
+      priorityConcerns: ["household costs"],
+    };
+
+    const retired = scorePersona(personas[1], segment, "france_general", frequencies, personas.length, guidance);
+    const nonRetired = scorePersona(personas[0], segment, "france_general", frequencies, personas.length, guidance);
+    const withoutAvoid = scorePersona(personas[1], segment, "france_general", frequencies, personas.length, { ...guidance, avoid: [] });
+
+    expect(retired.eligible).toBe(true);
+    expect(nonRetired.eligible).toBe(false);
+    expect(retired.total).toBeLessThan(withoutAvoid.total);
   });
 
   it("applies exclusion precedence and keeps audience prior from outranking non-matches", () => {
@@ -281,7 +303,7 @@ describe("mapPopulationToPanel", () => {
         makePersona(index, {
           assignmentMetadata: {
             ...makePersona(index).assignmentMetadata,
-            employment_class: index < 20 ? "retired" : index < 40 ? "service_employee" : "executive_professional",
+            employment_class: ["retired", "service_employee", "working_class", "executive_professional", "self_employed"][index % 5],
             household_type: index % 2 === 0 ? "family_household" : "single_adult",
             urbanicity: index % 3 === 0 ? "major_urban" : "secondary_urban",
             region_family: index % 4 === 0 ? "ile_de_france" : "regional_france",
@@ -308,5 +330,72 @@ describe("mapPopulationToPanel", () => {
           segment.representativePersonaIds.every((personaId) => segment.memberPersonaIds.includes(personaId)),
       ),
     ).toBe(true);
+  });
+
+  it("repairs a planner response that invents a metadata value before it can be approved", async () => {
+    const cache: PersonaCache = {
+      dataset: "nvidia/Nemotron-Personas-France",
+      fetchedAt: new Date().toISOString(),
+      sampleVersion: "2026-06-04",
+      sampleSize: 20,
+      personas: Array.from({ length: 20 }, (_, index) => makePersona(index)),
+    };
+    const validDesign: PopulationSegmentDesign = {
+      promptSummary: "Nuclear policy",
+      topicDimensions: ["energy"],
+      globalRationale: "Five distinct reads.",
+      segments: Array.from({ length: 5 }, (_, index) => makeSegment({ id: `segment-${index}` })),
+    };
+    const invalidDesign: PopulationSegmentDesign = {
+      ...validDesign,
+      segments: validDesign.segments.map((segment, index) =>
+        index === 0
+          ? {
+              ...segment,
+              inclusionTags: [{ family: "life_stage", values: ["older_adults"] }],
+            }
+          : segment,
+      ),
+    };
+    const structured = vi.mocked(callStructuredModel);
+    structured.mockClear();
+    structured
+      .mockResolvedValueOnce({
+        data: invalidDesign,
+        diagnostics: { name: "PopulationMapperAgent", model: "test-model", outputText: "invalid", inputTokens: 3, outputTokens: 2, totalTokens: 5, tokenUsageEstimated: false },
+        tokenUsage: { inputTokens: 3, outputTokens: 2, totalTokens: 5, estimated: false },
+      })
+      .mockResolvedValueOnce({
+        data: validDesign,
+        diagnostics: { name: "PopulationMapperRepair", model: "test-model", outputText: "repaired", inputTokens: 4, outputTokens: 3, totalTokens: 7, tokenUsageEstimated: false },
+        tokenUsage: { inputTokens: 4, outputTokens: 3, totalTokens: 7, estimated: false },
+      });
+
+    const result = await designPopulationSegments(
+      { rawInput: "Faut-il construire de nouvelles centrales nucléaires en France ?", inputType: "question" },
+      cache,
+    );
+
+    expect(structured).toHaveBeenCalledTimes(2);
+    expect(structured).toHaveBeenLastCalledWith(expect.objectContaining({ stageName: "PopulationMapperRepair" }));
+    expect(result.data.segments[0].inclusionTags).toEqual([{ family: "employment_class", values: ["retired"] }]);
+    expect(result.tokenUsage).toEqual({ inputTokens: 7, outputTokens: 5, totalTokens: 12, estimated: false });
+  });
+
+  it("validates against the stable metadata contract rather than one sample's values", () => {
+    const personas = [makePersona(1)];
+    const design: PopulationSegmentDesign = {
+      promptSummary: "Test",
+      topicDimensions: ["policy"],
+      globalRationale: "Test",
+      segments: Array.from({ length: 5 }, (_, index) =>
+        makeSegment({
+          id: `segment-${index}`,
+          inclusionTags: [{ family: "household_type", values: ["other_household"] }],
+        }),
+      ),
+    };
+
+    expect(() => validateSegmentDesignAgainstTaxonomy(design, personas)).not.toThrow();
   });
 });

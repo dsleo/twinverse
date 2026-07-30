@@ -67,6 +67,56 @@ describe("retrieveSources", () => {
     expect(result.plan?.providerDecisions.find((decision) => decision.provider === "reddit")?.reason).toMatch(/discourse/i);
   });
 
+  it("keeps distinct Google News links with a shared long prefix as distinct sources", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(
+        "<rss><channel>" +
+          "<item><title>Premier article - Média A</title><link>https://news.google.com/rss/articles/CBMi4GFshared-prefix-first</link><description>Premier résultat.</description><pubDate>Wed, 04 Jun 2026 10:00:00 GMT</pubDate></item>" +
+          "<item><title>Second article - Média B</title><link>https://news.google.com/rss/articles/CBMi4GFshared-prefix-second</link><description>Second résultat.</description><pubDate>Wed, 04 Jun 2026 11:00:00 GMT</pubDate></item>" +
+        "</channel></rss>",
+      )) as unknown as typeof fetch,
+    );
+
+    const result = await retrieveSources(
+      { rawInput: "Quels moyens aériens contre les incendies ?", inputType: "question" },
+      {
+        inputTerms: ["incendies"],
+        providerDecisions: [{ provider: "rss", query: "moyens aériens incendies", segmentIds: ["segment-1"], reason: "Current fire-response reporting.", triggeredBy: ["segment-1"], confidence: 0.8 }],
+        skippedProviders: [],
+        queryVariants: ["moyens aériens incendies"],
+      },
+    );
+
+    expect(result.sources).toHaveLength(2);
+    expect(new Set(result.sources.map((source) => source.id)).size).toBe(2);
+  });
+
+  it("collapses an exact repeated source and retains every intended segment", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(
+        "<rss><channel><item><title>Canadair update - Média</title><link>https://news.google.com/rss/articles/same-item</link><description>Shared result.</description><pubDate>Wed, 04 Jun 2026 10:00:00 GMT</pubDate></item></channel></rss>",
+      )) as unknown as typeof fetch,
+    );
+
+    const result = await retrieveSources(
+      { rawInput: "Quels moyens aériens contre les incendies ?", inputType: "question" },
+      {
+        inputTerms: ["incendies"],
+        providerDecisions: [
+          { provider: "rss", query: "moyens aériens incendies", segmentIds: ["segment-1"], reason: "Current fire-response reporting.", triggeredBy: ["segment-1"], confidence: 0.8 },
+          { provider: "rss", query: "Canadair incendies", segmentIds: ["segment-2"], reason: "Aircraft availability reporting.", triggeredBy: ["segment-2"], confidence: 0.8 },
+        ],
+        skippedProviders: [],
+        queryVariants: ["moyens aériens incendies", "Canadair incendies"],
+      },
+    );
+
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0]?.intendedSegmentIds).toEqual(["segment-1", "segment-2"]);
+  });
+
   it("classifies unreadable provider payloads as parse failures", async () => {
     vi.stubGlobal(
       "fetch",

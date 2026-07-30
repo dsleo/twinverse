@@ -8,6 +8,7 @@ import {
   personaAssignmentMetadataSchema,
   personaCacheSchema,
   type NormalizedPersona,
+  type MetadataTagFilter,
   type PersonaAssignmentMetadata,
   type PersonaCache,
 } from "../../lib/labSchemas";
@@ -15,6 +16,81 @@ import {
 const DATASET_NAME = "nvidia/Nemotron-Personas-France";
 const DEFAULT_SAMPLE_SIZE = 100;
 const CACHE_TTL_MS = Number(process.env.HF_PERSONA_CACHE_TTL_HOURS || "24") * 60 * 60 * 1000;
+
+const PLANNING_METADATA_TAXONOMY: Record<
+  MetadataTagFilter["family"],
+  readonly string[]
+> = {
+  life_stage: ["young_adult", "midcareer", "established_adult", "retirement_age"],
+  household_type: [
+    "family_household",
+    "couple_without_children",
+    "single_adult",
+    "other_household",
+  ],
+  employment_class: [
+    "retired",
+    "executive_professional",
+    "self_employed",
+    "intermediate_professional",
+    "working_class",
+    "service_employee",
+    "out_of_work",
+    "other",
+  ],
+  income_posture: ["affluent", "cost_sensitive", "stable_middle", "mixed"],
+  housing_status: ["urban_renter_profile", "family_home_profile", "mixed_housing"],
+  mobility_profile: ["transit_oriented", "mixed_commute", "car_and_local_service"],
+  urbanicity: ["major_urban", "secondary_urban", "small_town_rural"],
+  region_family: [
+    "ile_de_france",
+    "north_industrial",
+    "alpine_rhone",
+    "overseas",
+    "regional_france",
+  ],
+  public_service_dependency: ["high", "medium_high", "medium"],
+  policy_exposure_tags: [
+    "retired",
+    "executive_professional",
+    "self_employed",
+    "intermediate_professional",
+    "working_class",
+    "service_employee",
+    "out_of_work",
+    "other",
+    "transit_oriented",
+    "mixed_commute",
+    "car_and_local_service",
+    "major_urban",
+    "secondary_urban",
+    "small_town_rural",
+    "family_budget_exposure",
+    "solo_household_exposure",
+    "shared_household_exposure",
+    "housing_cost_exposure",
+    "public_service_interface",
+  ],
+  economic_vulnerability_tags: [
+    "high_cost_of_living_pressure",
+    "moderate_cost_pressure",
+    "low_cost_pressure",
+    "employment_insecurity",
+    "fixed_income",
+  ],
+  trust_orientation_tags: ["pragmatic", "open_to_argument", "proof_seeking", "institution_reliant"],
+  issue_salience_tags: [
+    "cost_of_living",
+    "employment",
+    "family_life",
+    "transport",
+    "public_services",
+    "local_economy",
+    "housing",
+    "healthcare",
+    "public_policy",
+  ],
+};
 
 function slugify(value: string) {
   return value
@@ -468,6 +544,15 @@ export function metadataTaxonomy(personas: NormalizedPersona[]) {
     }
   }
   return taxonomy;
+}
+
+export function planningMetadataTaxonomy(): Record<MetadataTagFilter["family"], string[]> {
+  return Object.fromEntries(
+    Object.entries(PLANNING_METADATA_TAXONOMY).map(([family, values]) => [
+      family,
+      [...values],
+    ]),
+  ) as Record<MetadataTagFilter["family"], string[]>;
 }
 
 export async function loadPersonaSample(forceRefresh = false) {

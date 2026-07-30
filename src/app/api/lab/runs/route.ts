@@ -1,9 +1,11 @@
 import { after, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
-import { inputTypeSchema, runModeSchema } from "../../../../lib/labSchemas";
+import { audienceGuidanceSchema, audiencePresetSchema, inputTypeSchema, populationSegmentDesignSchema, runModeSchema } from "../../../../lib/labSchemas";
 import { resolveLeFigaroDailyQuestion } from "../../../../server/lab/dailyQuestion";
 import { logLabRun } from "../../../../server/lab/logging";
 import { createLabRun, executeLabRun } from "../../../../server/lab/pipeline";
+import { validateAudienceGuidanceAgainstTaxonomy, validateSegmentDesignAgainstTaxonomy } from "../../../../server/lab/populationMapping";
+import { loadPersonaSample } from "../../../../server/lab/personaSample";
 import { createTvAudienceRun } from "../../../../server/lab/tvPipeline";
 import { listRuns } from "../../../../server/lab/persistence";
 
@@ -13,6 +15,9 @@ const createRunRequestSchema = z.object({
   rawInput: z.string().optional(),
   inputType: inputTypeSchema.optional(),
   mode: runModeSchema.optional(),
+  audiencePreset: audiencePresetSchema.optional(),
+  audienceGuidance: audienceGuidanceSchema.optional(),
+  approvedSegmentDesign: populationSegmentDesignSchema.optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
@@ -45,7 +50,10 @@ export async function POST(request: Request) {
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "Invalid request payload." }, { status: 422 });
     }
-    throw error;
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to create this run." },
+      { status: 422 },
+    );
   }
 
   const mode = body.mode ?? "manual";
@@ -82,13 +90,23 @@ export async function POST(request: Request) {
         date: body.date,
       });
     } else {
+      const cache = await loadPersonaSample();
+      const guidance = validateAudienceGuidanceAgainstTaxonomy(
+        body.audienceGuidance ?? { mode: "automatic", include: [], avoid: [], priorityConcerns: [] },
+        cache.personas,
+      );
+      const approvedSegmentDesign = body.approvedSegmentDesign
+        ? validateSegmentDesignAgainstTaxonomy(body.approvedSegmentDesign, cache.personas)
+        : undefined;
       run = await createLabRun({
         input: {
           rawInput: body.rawInput ?? "",
           inputType: body.inputType ?? "question",
         },
         mode,
-        audiencePreset: "france_general",
+        audiencePreset: body.audiencePreset ?? "france_general",
+        audienceGuidance: guidance,
+        approvedSegmentDesign,
         promptSnapshot: body.rawInput ?? "",
       });
     }
@@ -96,7 +114,10 @@ export async function POST(request: Request) {
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "Invalid request payload." }, { status: 422 });
     }
-    throw error;
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to create this run." },
+      { status: 422 },
+    );
   }
 
   if (!run) {

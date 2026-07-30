@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { DecisionReport } from "./DecisionReport";
+import { AudienceBuilder } from "./AudienceBuilder";
 import { PersonaCarousel } from "../personas/PersonaCarousel";
 import { TvAudienceResult } from "./TvAudienceResult";
 import { runModeLabels } from "../../lib/labAudience";
-import type { DailyQuestionPreview, InputType, PersistedLabRun, RunMode } from "../../lib/labSchemas";
+import type { AudienceGuidance, DailyQuestionPreview, InputType, PersistedLabRun, PopulationSegmentDesign, RunMode } from "../../lib/labSchemas";
 
 type JumpCard = {
   id: string;
@@ -88,6 +89,8 @@ type LabPageClientProps = {
 export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClientProps) {
   const [mode, setMode] = useState<RunMode>(fixedMode ?? "manual");
   const [rawInput, setRawInput] = useState("Faut-il construire de nouvelles centrales nucléaires en France ?");
+  const [audienceGuidance, setAudienceGuidance] = useState<AudienceGuidance>({ mode: "automatic", include: [], avoid: [], priorityConcerns: [] });
+  const [approvedSegmentDesign, setApprovedSegmentDesign] = useState<PopulationSegmentDesign | undefined>();
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<PersistedLabRun | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -256,11 +259,16 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
           rawInput: mode === "manual" ? rawInput : undefined,
           inputType: isTvMode ? "other" : ("question" satisfies InputType),
           date: targetDate,
+          audienceGuidance: mode === "manual" ? audienceGuidance : undefined,
+          approvedSegmentDesign: mode === "manual" ? approvedSegmentDesign : undefined,
         }),
       });
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (body?.error?.includes("uses an unknown attribute")) {
+          throw new Error("This audience proposal is no longer valid. Choose Change audience and review a new proposal before running it.");
+        }
         throw new Error(body?.error ?? "Unable to start the run.");
       }
 
@@ -354,7 +362,12 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
   const isRunActive = run?.status === "running";
   const submitDisabled =
     isRunActive ||
-    (mode === "manual" ? rawInput.trim().length < 10 : mode === "le_figaro_daily" ? isDailyQuestionLoading || !leFigaroAvailable : false);
+    (mode === "manual"
+      ? rawInput.trim().length < 10 || (audienceGuidance.mode === "guided" && !approvedSegmentDesign)
+      : mode === "le_figaro_daily"
+        ? isDailyQuestionLoading || !leFigaroAvailable
+        : false);
+  const showRunAction = mode !== "manual" || audienceGuidance.mode === "automatic" || Boolean(approvedSegmentDesign);
 
   return (
     <div className="lab-page page-shell">
@@ -457,7 +470,10 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             <textarea
               id="lab-input"
               value={rawInput}
-              onChange={(event) => setRawInput(event.target.value)}
+              onChange={(event) => {
+                setRawInput(event.target.value);
+                setApprovedSegmentDesign(undefined);
+              }}
               minLength={10}
               rows={5}
               aria-describedby="lab-input-error"
@@ -466,27 +482,40 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
             />
           )}
 
-          <div className="lab-command-row">
-            <button type="submit" className="accent-button" disabled={submitDisabled}>
-              {isRunActive ? "Running…" : "Run"}
-            </button>
-            <div className="lab-status" aria-live="polite">
-              {run ? (
-                <>
-                  {run.status === "running" ? null : (
-                    <span
-                      className={`status-pill ${
-                        run.status === "failed" ? "" : run.status === "completed" ? "status-complete" : "status-running"
-                      }`}
-                    >
-                      {run.status}
-                    </span>
-                  )}
-                  {currentStage?.summary ? <p>{currentStage.summary}</p> : null}
-                </>
-              ) : null}
+          {mode === "manual" ? (
+            <AudienceBuilder
+              input={{ rawInput, inputType: "question" }}
+              guidance={audienceGuidance}
+              approvedDesign={approvedSegmentDesign}
+              disabled={isRunActive}
+              onGuidanceChange={setAudienceGuidance}
+              onApprovedDesignChange={setApprovedSegmentDesign}
+            />
+          ) : null}
+
+          {showRunAction ? (
+            <div className="lab-command-row">
+              <button type="submit" className="accent-button" disabled={submitDisabled}>
+                {isRunActive ? "Running…" : "Run simulation"}
+              </button>
+              <div className="lab-status" aria-live="polite">
+                {run ? (
+                  <>
+                    {run.status === "running" ? null : (
+                      <span
+                        className={`status-pill ${
+                          run.status === "failed" ? "" : run.status === "completed" ? "status-complete" : "status-running"
+                        }`}
+                      >
+                        {run.status}
+                      </span>
+                    )}
+                    {currentStage?.summary ? <p>{currentStage.summary}</p> : null}
+                  </>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {error ? (
             <p id="lab-input-error" className="lab-error" role="alert">
@@ -548,6 +577,15 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
               <h2>{run.audiencePreset === "le_figaro_reader" ? "Reader-weighted segments" : "Question-driven segments"}</h2>
             </div>
           </div>
+          {run.audienceGuidance.mode === "guided" ? (
+            <details className="audience-definition">
+              <summary>Audience definition</summary>
+              {run.audienceGuidance.brief ? <p>{run.audienceGuidance.brief}</p> : null}
+              {run.audienceGuidance.include.length ? <p><strong>Must include:</strong> {run.audienceGuidance.include.map((filter) => `${filter.family.replaceAll("_", " ")}: ${filter.values.join(", ")}`).join(" · ")}</p> : null}
+              {run.audienceGuidance.avoid.length ? <p><strong>Avoid over-representing:</strong> {run.audienceGuidance.avoid.map((filter) => `${filter.family.replaceAll("_", " ")}: ${filter.values.join(", ")}`).join(" · ")}</p> : null}
+              {run.audienceGuidance.priorityConcerns.length ? <p><strong>Priority concerns:</strong> {run.audienceGuidance.priorityConcerns.join(" · ")}</p> : null}
+            </details>
+          ) : null}
           <div className="segment-explorer">
             <div className="segment-list" role="list">
               {run.populationMap.segments.map((segment) => {
@@ -697,10 +735,10 @@ export function LabPageClient({ fixedMode, showModePicker = false }: LabPageClie
                   <span className="source-tag">{group.sources.length} item{group.sources.length === 1 ? "" : "s"}</span>
                 </summary>
                 <div className="source-item-list">
-                  {group.sources.map((source) => {
+                  {group.sources.map((source, index) => {
                     const showTitle = !source.sourceName || !source.title.trim().toLocaleLowerCase().includes(source.sourceName.trim().toLocaleLowerCase());
                     return (
-                      <article key={source.id} className="source-item">
+                      <article key={`${source.id}:${source.url ?? source.title}:${source.publishedAt ?? ""}:${index}`} className="source-item">
                         {showTitle ? <h4>{source.title}</h4> : null}
                         {source.sourceName ? (
                           source.url ? (

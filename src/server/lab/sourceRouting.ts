@@ -17,6 +17,9 @@ export function routeSourcesBySegment(
     const ranked = sources
       .filter((source) => source.provenance === "live")
       .filter((source) => {
+        if (source.intendedSegmentIds?.length) {
+          return source.intendedSegmentIds.includes(segment.id);
+        }
         const task = plan?.providerDecisions.find((decision) => decision.provider === source.provider && decision.query === source.query);
         return !task || !task.segmentIds?.length || task.segmentIds.includes(segment.id);
       })
